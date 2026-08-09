@@ -1,0 +1,11 @@
+# No build system on purpose: the application is not installed as a package,
+# it is run from the checkout. This file only carries the pytest configuration.
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+# A SAWarning means SQLAlchemy silently did not do something, e.g. skipped an
+# object on save. In an application whose worst failure is a grade that was not
+# written, that must never pass a test run.
+filterwarnings = ["error::sqlalchemy.exc.SAWarning"]
