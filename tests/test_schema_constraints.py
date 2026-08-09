@@ -12,9 +12,9 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from app.db.models import (
+    VORGABE_GEWICHT_HALBJAHR,
     Halbjahr,
     Kurs,
-    Leistung,
     Note,
     NoteHistorie,
     Notenueberschreibung,
@@ -22,7 +22,6 @@ from app.db.models import (
 )
 from app.enums import (
     Bezugszeitraum,
-    Eingabeart,
     HistorieAktion,
     NoteStatus,
     UeberschreibungQuelle,
@@ -81,9 +80,6 @@ def test_loeschen_eines_schuljahrs_entfernt_alle_abhaengigen_daten(session, grap
     ):
         assert _anzahl(session, tabelle) == 0, tabelle
 
-    # The grading key is shared data and must survive.
-    assert _anzahl(session, "notenschluessel") == 1
-
 
 def test_loeschen_eines_schuelers_entfernt_seine_historie(session, graph):
     session.add(
@@ -109,18 +105,11 @@ def test_loeschen_eines_schuelers_entfernt_seine_historie(session, graph):
     assert _anzahl(session, "schueler") == 1
 
 
-def test_notenschluessel_kann_nicht_geloescht_werden_solange_benutzt(session, graph):
-    session.delete(graph.notenschluessel)
-    with pytest.raises(IntegrityError):
-        session.commit()
-
-
 def test_je_schueler_und_leistung_nur_eine_note(session, graph):
     session.add(
         Note(
             leistung_id=graph.leistung.id,
             schueler_id=graph.schueler_a.id,
-            eingabeart=Eingabeart.NOTE,
             notenwert=Decimal("3.0"),
             status=NoteStatus.GEWERTET,
         )
@@ -147,39 +136,8 @@ def test_unbekannter_status_wird_abgewiesen(session, graph):
         Note(
             leistung_id=graph.leistung.id,
             schueler_id=graph.schueler_b.id,
-            eingabeart=Eingabeart.NOTE,
             notenwert=Decimal("2.0"),
             status="entschuldigt",
-        )
-    )
-    with pytest.raises(IntegrityError):
-        session.flush()
-
-
-def test_punkteingabe_ohne_punkte_wird_abgewiesen(session, graph):
-    session.add(
-        Note(
-            leistung_id=graph.leistung.id,
-            schueler_id=graph.schueler_b.id,
-            eingabeart=Eingabeart.PUNKTE,
-            punkte=None,
-            notenwert=Decimal("2.0"),
-            status=NoteStatus.GEWERTET,
-        )
-    )
-    with pytest.raises(IntegrityError):
-        session.flush()
-
-
-def test_noteneingabe_mit_punkten_wird_abgewiesen(session, graph):
-    session.add(
-        Note(
-            leistung_id=graph.leistung.id,
-            schueler_id=graph.schueler_b.id,
-            eingabeart=Eingabeart.NOTE,
-            punkte=Decimal("45"),
-            notenwert=Decimal("2.0"),
-            status=NoteStatus.GEWERTET,
         )
     )
     with pytest.raises(IntegrityError):
@@ -191,7 +149,6 @@ def test_gewertete_note_ohne_notenwert_wird_abgewiesen(session, graph):
         Note(
             leistung_id=graph.leistung.id,
             schueler_id=graph.schueler_b.id,
-            eingabeart=Eingabeart.NOTE,
             notenwert=None,
             status=NoteStatus.GEWERTET,
         )
@@ -209,7 +166,6 @@ def test_nicht_erbracht_wird_ohne_notenwert_gespeichert(session, graph):
         Note(
             leistung_id=graph.leistung.id,
             schueler_id=graph.schueler_b.id,
-            eingabeart=Eingabeart.NOTE,
             notenwert=None,
             status=NoteStatus.NICHT_ERBRACHT,
         )
@@ -226,7 +182,6 @@ def test_nicht_gewertet_wird_ohne_notenwert_gespeichert(session, graph):
         Note(
             leistung_id=graph.leistung.id,
             schueler_id=graph.schueler_b.id,
-            eingabeart=Eingabeart.NOTE,
             notenwert=None,
             status=NoteStatus.NICHT_GEWERTET,
         )
@@ -236,23 +191,18 @@ def test_nicht_gewertet_wird_ohne_notenwert_gespeichert(session, graph):
     assert _anzahl(session, "note") == 2
 
 
-@pytest.mark.parametrize(
-    ("gewicht_1", "gewicht_2"),
-    [(Decimal("40"), None), (None, Decimal("60"))],
-)
-def test_halbjahrsgewichte_nur_paarweise(session, graph, gewicht_1, gewicht_2):
-    """A single weight would silently define the other one."""
-    graph.kurs.gewicht_halbjahr_1 = gewicht_1
-    graph.kurs.gewicht_halbjahr_2 = gewicht_2
+def test_halbjahrsgewichte_haben_die_vorgabe(session, graph):
+    """Open point O-7, answered: 50/50, editable per course."""
+    kurs = session.get(Kurs, graph.kurs.id)
+    assert kurs.gewicht_halbjahr_1 == VORGABE_GEWICHT_HALBJAHR
+    assert kurs.gewicht_halbjahr_2 == VORGABE_GEWICHT_HALBJAHR
+
+
+@pytest.mark.parametrize("spalte", ["gewicht_halbjahr_1", "gewicht_halbjahr_2"])
+def test_halbjahrsgewichte_duerfen_nicht_leer_sein(session, graph, spalte):
+    setattr(graph.kurs, spalte, None)
     with pytest.raises(IntegrityError):
         session.flush()
-
-
-def test_halbjahrsgewichte_duerfen_beide_fehlen(session, graph):
-    """As long as O-7 is open, "not decided" has to be a storable state."""
-    kurs = session.get(Kurs, graph.kurs.id)
-    assert kurs.gewicht_halbjahr_1 is None
-    assert kurs.gewicht_halbjahr_2 is None
 
 
 def test_mehrere_festsetzungen_je_bezugszeitraum_sind_zulaessig(session, graph):
@@ -325,10 +275,3 @@ def test_kurs_und_fach_sind_je_klasse_eindeutig(session, graph):
     session.add(Kurs(klasse_id=graph.klasse.id, fach="Deutsch"))
     with pytest.raises(IntegrityError):
         session.flush()
-
-
-def test_leistung_ohne_eigenen_schluessel_erbt_vom_kurs(session, graph):
-    """NULL means "course default"; that is what T-10 depends on."""
-    leistung = session.get(Leistung, graph.leistung.id)
-    assert leistung.notenschluessel_id is None
-    assert leistung.notengruppe.kurs.notenschluessel.bezeichnung == "IHK"

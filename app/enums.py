@@ -19,21 +19,6 @@ class NoteStatus(StrEnum):
     NICHT_ERBRACHT = "nicht_erbracht"
 
 
-class Eingabeart(StrEnum):
-    """Specification 4.3: a grade is entered either directly or as points."""
-
-    NOTE = "note"
-    PUNKTE = "punkte"
-
-
-class NotenschluesselTyp(StrEnum):
-    """Specification 4.2."""
-
-    IHK = "ihk"
-    RLP_STANDARD = "rlp_standard"
-    BENUTZERDEFINIERT = "benutzerdefiniert"
-
-
 class Bezugszeitraum(StrEnum):
     """Period a manually fixed grade refers to (specification 3.1)."""
 

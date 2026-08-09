@@ -6,13 +6,13 @@ keeping all of them. Comments and docstrings are English.
 
 Deviations from section 3.1, all approved before implementation:
 
+* **No point entry.** Grades are entered directly as 1+ ... 6; any conversion
+  from points happens outside this application. The Notenschluessel entity of
+  3.1, ``leistung.max_punkte`` and ``note.eingabeart``/``punkte`` are therefore
+  not built, and with them sections 4.2 and the point entry half of 4.3.
 * ``kurs.gewicht_halbjahr_1`` / ``_2`` — section 4.5 requires the weighting of
   the two terms to be configurable per course, but 3.1 lists no such field.
-  Both are nullable without a default: as long as the weighting has not been
-  decided (open point O-7), the application shows "nicht festgelegt" rather
-  than silently assuming 40/60.
-* ``notenschluessel.ist_platzhalter`` — the RLP key ships with placeholder
-  thresholds (open point O-1) and the interface has to say so.
+  Default 50/50 (open point O-7), editable per course.
 * ``notenueberschreibung.quelle`` — a fixed grade is stored even when it equals
   the calculated proposal, so it is frozen at that moment and does not drift
   when a grade is entered later. The column records whether the proposal was
@@ -38,7 +38,6 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
-    JSON,
     LargeBinary,
     String,
     Text,
@@ -51,12 +50,14 @@ from app.db.base import Base
 from app.db.types import DecimalText
 from app.enums import (
     Bezugszeitraum,
-    Eingabeart,
     HistorieAktion,
-    NotenschluesselTyp,
     NoteStatus,
     UeberschreibungQuelle,
 )
+
+# Answer to open point O-7. The weighting of the two terms for the year grade;
+# the teacher fixes the actual report grade anyway (Notenueberschreibung).
+VORGABE_GEWICHT_HALBJAHR = Decimal("50")
 
 
 def _in_clause(column: str, allowed: Iterable[str]) -> str:
@@ -183,18 +184,16 @@ class Kurs(Base):
         ForeignKey("klasse.id", ondelete="CASCADE"), nullable=False
     )
     fach: Mapped[str] = mapped_column(String, nullable=False)
-    # RESTRICT: deleting a grading key must never take courses with it.
-    notenschluessel_id: Mapped[int | None] = mapped_column(
-        ForeignKey("notenschluessel.id", ondelete="RESTRICT"), nullable=True
-    )
     notiz: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # Section 4.5. NULL means "not decided yet" (open point O-7); the interface
-    # then shows the plain mean and says the weighting is missing.
-    gewicht_halbjahr_1: Mapped[Decimal | None] = mapped_column(DecimalText, nullable=True)
-    gewicht_halbjahr_2: Mapped[Decimal | None] = mapped_column(DecimalText, nullable=True)
+    # Section 4.5: weighting of the two terms for the year grade, per course.
+    gewicht_halbjahr_1: Mapped[Decimal] = mapped_column(
+        DecimalText, nullable=False, default=VORGABE_GEWICHT_HALBJAHR
+    )
+    gewicht_halbjahr_2: Mapped[Decimal] = mapped_column(
+        DecimalText, nullable=False, default=VORGABE_GEWICHT_HALBJAHR
+    )
 
     klasse: Mapped["Klasse"] = relationship(back_populates="kurse")
-    notenschluessel: Mapped["Notenschluessel | None"] = relationship()
     teilnahmen: Mapped[list["Kursteilnahme"]] = relationship(
         back_populates="kurs", cascade="all, delete", passive_deletes=True
     )
@@ -205,15 +204,7 @@ class Kurs(Base):
         back_populates="kurs", cascade="all, delete", passive_deletes=True
     )
 
-    __table_args__ = (
-        UniqueConstraint("klasse_id", "fach"),
-        # Either both terms are weighted or neither is. A single weight would
-        # silently define the other one.
-        CheckConstraint(
-            "(gewicht_halbjahr_1 IS NULL) = (gewicht_halbjahr_2 IS NULL)",
-            name="halbjahrgewichte_paarweise",
-        ),
-    )
+    __table_args__ = (UniqueConstraint("klasse_id", "fach"),)
 
 
 class Kursteilnahme(Base):
@@ -272,8 +263,8 @@ class Notengruppe(Base):
 class Leistung(Base):
     """One assessment occasion, e.g. "2. Klassenarbeit".
 
-    ``notenschluessel_id`` NULL means the course default applies. Changing the
-    course default therefore only affects assessments that inherit it (T-10).
+    ``gewicht`` weights this assessment within its Notengruppe (4.4). There is
+    no ``max_punkte``: grades are entered directly, not as points.
     """
 
     __tablename__ = "leistung"
@@ -284,17 +275,12 @@ class Leistung(Base):
     )
     bezeichnung: Mapped[str] = mapped_column(String, nullable=False)
     datum: Mapped[date] = mapped_column(Date, nullable=False)
-    notenschluessel_id: Mapped[int | None] = mapped_column(
-        ForeignKey("notenschluessel.id", ondelete="RESTRICT"), nullable=True
-    )
-    max_punkte: Mapped[Decimal | None] = mapped_column(DecimalText, nullable=True)
     gewicht: Mapped[Decimal] = mapped_column(
         DecimalText, nullable=False, default=Decimal("1.0")
     )
     notiz: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     notengruppe: Mapped["Notengruppe"] = relationship(back_populates="leistungen")
-    notenschluessel: Mapped["Notenschluessel | None"] = relationship()
     noten: Mapped[list["Note"]] = relationship(
         back_populates="leistung", cascade="all, delete", passive_deletes=True
     )
@@ -303,13 +289,14 @@ class Leistung(Base):
 class Note(Base):
     """One pupil's assessment of one Leistung.
 
-    ``notenwert`` stays NULL for ``nicht_erbracht``: the 6.0 that such a status
+    ``notenwert`` holds one of the sixteen canonical values of 4.1 (0.7 for
+    "1+" up to 6.0). The mapping to and from the displayed grade lives in the
+    grading module, not here.
+
+    It stays NULL for ``nicht_erbracht``: the 6.0 that such a status
     contributes is produced by the grading module from the status and is never
     written into the row. Otherwise a later status change could no longer be
     told apart from a genuine 6.
-
-    For point entry both the points and the resulting grade value are stored,
-    so that a later change of the grading key remains traceable (4.3).
     """
 
     __tablename__ = "note"
@@ -321,8 +308,6 @@ class Note(Base):
     schueler_id: Mapped[int] = mapped_column(
         ForeignKey("schueler.id", ondelete="CASCADE"), nullable=False
     )
-    eingabeart: Mapped[str] = mapped_column(String, nullable=False)
-    punkte: Mapped[Decimal | None] = mapped_column(DecimalText, nullable=True)
     notenwert: Mapped[Decimal | None] = mapped_column(DecimalText, nullable=True)
     status: Mapped[str] = mapped_column(String, nullable=False)
     notiz: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -338,42 +323,10 @@ class Note(Base):
 
     __table_args__ = (
         UniqueConstraint("leistung_id", "schueler_id"),
-        CheckConstraint(_in_clause("eingabeart", Eingabeart), name="eingabeart_gueltig"),
         CheckConstraint(_in_clause("status", NoteStatus), name="status_gueltig"),
-        CheckConstraint(
-            "eingabeart <> 'punkte' OR punkte IS NOT NULL", name="punkte_bei_punkteingabe"
-        ),
-        CheckConstraint(
-            "eingabeart <> 'note' OR punkte IS NULL", name="keine_punkte_bei_noteneingabe"
-        ),
         CheckConstraint(
             "status <> 'gewertet' OR notenwert IS NOT NULL", name="notenwert_bei_gewertet"
         ),
-    )
-
-
-class Notenschluessel(Base):
-    """Percentage thresholds, a record and not a constant in the code (4.2).
-
-    ``schwellen`` holds a JSON list, descending by threshold, with the numbers
-    as strings so the exact decimal value survives:
-    ``[{"ab_prozent": "92", "notenwert": "1.0"}, ...]``. The structure is
-    validated in the service layer.
-    """
-
-    __tablename__ = "notenschluessel"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    bezeichnung: Mapped[str] = mapped_column(String, nullable=False)
-    typ: Mapped[str] = mapped_column(String, nullable=False)
-    schwellen: Mapped[list[dict]] = mapped_column(JSON, nullable=False)
-    # Set while the thresholds are still the placeholder from 4.2 (open point
-    # O-1). The interface has to make that visible, not just a code comment.
-    ist_platzhalter: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-
-    __table_args__ = (
-        UniqueConstraint("bezeichnung"),
-        CheckConstraint(_in_clause("typ", NotenschluesselTyp), name="typ_gueltig"),
     )
 
 

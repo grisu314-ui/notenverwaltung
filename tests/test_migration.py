@@ -17,7 +17,6 @@ ERWARTETE_TABELLEN = {
     "note",
     "note_historie",
     "notengruppe",
-    "notenschluessel",
     "notenueberschreibung",
     "schueler",
     "schuljahr",

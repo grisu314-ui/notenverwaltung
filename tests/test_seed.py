@@ -1,8 +1,10 @@
 """The seed script is the only data development ever runs against."""
 
+from decimal import Decimal
+
 import pytest
 
-from app.db.models import Note, Notenschluessel, Schueler
+from app.db.models import Note, Schueler
 from app.db.session import create_session_factory
 from app.enums import NoteStatus
 from scripts.seed_dev import DatenbankNichtLeerError, seed
@@ -20,7 +22,6 @@ def geseedete_session(engine):
 
 def test_seed_legt_daten_an(geseedete_session):
     assert geseedete_session.query(Schueler).count() == 12
-    assert geseedete_session.query(Notenschluessel).count() == 2
 
 
 def test_seed_enthaelt_beide_sonderstatus(geseedete_session):
@@ -32,21 +33,13 @@ def test_seed_enthaelt_beide_sonderstatus(geseedete_session):
             assert note.notenwert is None
 
 
-def test_platzhalterschluessel_ist_als_solcher_gekennzeichnet(geseedete_session):
-    """Open point O-1: the RLP thresholds are guessed and must say so."""
-    rlp = (
-        geseedete_session.query(Notenschluessel)
-        .filter(Notenschluessel.ist_platzhalter.is_(True))
-        .one()
-    )
-    assert "Platzhalter" in rlp.bezeichnung
-
-    ihk = (
-        geseedete_session.query(Notenschluessel)
-        .filter(Notenschluessel.ist_platzhalter.is_(False))
-        .one()
-    )
-    assert ihk.bezeichnung == "IHK"
+def test_seed_enthaelt_tendenznoten(geseedete_session):
+    """Grades are entered as 1+ ... 6; the canonical value of "1+" is 0.7."""
+    notenwerte = {
+        note.notenwert for note in geseedete_session.query(Note).all() if note.notenwert
+    }
+    assert Decimal("0.7") in notenwerte
+    assert Decimal("2.3") in notenwerte
 
 
 def test_seed_verweigert_eine_nicht_leere_datenbank(engine):

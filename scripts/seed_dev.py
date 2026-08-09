@@ -31,35 +31,11 @@ from app.db.models import (  # noqa: E402
     Leistung,
     Note,
     Notengruppe,
-    Notenschluessel,
     Schueler,
     Schuljahr,
 )
 from app.db.session import create_app_engine, create_session_factory  # noqa: E402
-from app.enums import Eingabeart, NotenschluesselTyp, NoteStatus  # noqa: E402
-
-# Specification 4.2, binding nationwide values.
-IHK_SCHWELLEN = [
-    {"ab_prozent": "92", "notenwert": "1.0"},
-    {"ab_prozent": "81", "notenwert": "2.0"},
-    {"ab_prozent": "67", "notenwert": "3.0"},
-    {"ab_prozent": "50", "notenwert": "4.0"},
-    {"ab_prozent": "30", "notenwert": "5.0"},
-    {"ab_prozent": "0", "notenwert": "6.0"},
-]
-
-# Open point O-1: the real thresholds are unknown. This is the placeholder from
-# 4.2 -- linear, pass mark at 50 %, whole grades only, no invented tendency
-# boundaries. Flagged with ist_platzhalter so the interface can say so. Do not
-# copy these numbers into the productive database.
-RLP_PLATZHALTER_SCHWELLEN = [
-    {"ab_prozent": "87.5", "notenwert": "1.0"},
-    {"ab_prozent": "75", "notenwert": "2.0"},
-    {"ab_prozent": "62.5", "notenwert": "3.0"},
-    {"ab_prozent": "50", "notenwert": "4.0"},
-    {"ab_prozent": "25", "notenwert": "5.0"},
-    {"ab_prozent": "0", "notenwert": "6.0"},
-]
+from app.enums import NoteStatus  # noqa: E402
 
 NAMEN_BFS = [
     ("Änne", "Öztürk"),
@@ -78,7 +54,17 @@ NAMEN_BS = [
     ("Lea", "Amrhein"),
 ]
 
-TABELLEN_DIE_LEER_SEIN_MUESSEN = ("schuljahr", "schueler", "note", "notenschluessel")
+# Canonical values of specification 4.1, including tendencies.
+NOTENWERTE_KLASSENARBEIT = [
+    Decimal("0.7"),  # 1+
+    Decimal("2.0"),  # 2
+    Decimal("2.3"),  # 2-
+    Decimal("3.0"),  # 3
+    Decimal("4.3"),  # 4-
+    Decimal("5.0"),  # 5
+]
+
+TABELLEN_DIE_LEER_SEIN_MUESSEN = ("schuljahr", "schueler", "note")
 
 
 class DatenbankNichtLeerError(RuntimeError):
@@ -104,19 +90,6 @@ def seed(engine: Engine) -> None:
     session = create_session_factory(engine)()
     try:
         _pruefe_leer(session)
-
-        ihk = Notenschluessel(
-            bezeichnung="IHK",
-            typ=NotenschluesselTyp.IHK,
-            schwellen=IHK_SCHWELLEN,
-            ist_platzhalter=False,
-        )
-        rlp = Notenschluessel(
-            bezeichnung="RLP-Standard (Platzhalter)",
-            typ=NotenschluesselTyp.RLP_STANDARD,
-            schwellen=RLP_PLATZHALTER_SCHWELLEN,
-            ist_platzhalter=True,
-        )
 
         schuljahr = Schuljahr(
             bezeichnung="2026/27",
@@ -148,11 +121,7 @@ def seed(engine: Engine) -> None:
             ]
 
             for fach in faecher:
-                kurs = Kurs(
-                    klasse=klasse,
-                    fach=fach,
-                    notenschluessel=ihk if fach == "Wirtschaftslehre" else rlp,
-                )
+                kurs = Kurs(klasse=klasse, fach=fach)
                 # All active pupils of the class join a new course by default.
                 for schueler in schuelerliste:
                     Kursteilnahme(kurs=kurs, schueler=schueler, ist_aktiv=True)
@@ -161,7 +130,7 @@ def seed(engine: Engine) -> None:
 
         # Added last, once the whole graph exists: everything else is reachable
         # from the school year and is cascaded in from there.
-        session.add_all([ihk, rlp, schuljahr])
+        session.add(schuljahr)
         session.commit()
     finally:
         session.close()
@@ -199,7 +168,6 @@ def _seed_notengruppen(kurs: Kurs, halbjahr: Halbjahr, schuelerliste: list[Schue
         notengruppe=klassenarbeiten,
         bezeichnung="1. Klassenarbeit",
         datum=date(2026, 9, 24),
-        max_punkte=Decimal("50"),
         gewicht=Decimal("1.0"),
     )
     mitarbeitsnote = Leistung(
@@ -209,35 +177,16 @@ def _seed_notengruppen(kurs: Kurs, halbjahr: Halbjahr, schuelerliste: list[Schue
         gewicht=Decimal("1.0"),
     )
 
-    # Point entry: points and the resulting grade value are both stored (4.3).
-    punkte_je_schueler = [
-        Decimal("46"),  # 92 % -- exactly on the IHK threshold
-        Decimal("45"),  # 90 %
-        Decimal("38"),
-        Decimal("31"),
-        Decimal("24"),
-        Decimal("12"),
-    ]
-    notenwerte = [
-        Decimal("1.0"),
-        Decimal("2.0"),
-        Decimal("2.0"),
-        Decimal("3.0"),
-        Decimal("4.0"),
-        Decimal("5.0"),
-    ]
-    for schueler, punkte, notenwert in zip(schuelerliste, punkte_je_schueler, notenwerte):
+    for schueler, notenwert in zip(schuelerliste, NOTENWERTE_KLASSENARBEIT):
         Note(
             leistung=klassenarbeit,
             schueler=schueler,
-            eingabeart=Eingabeart.PUNKTE,
-            punkte=punkte,
             notenwert=notenwert,
             status=NoteStatus.GEWERTET,
         )
 
-    # Direct grade entry, including both non-standard statuses. A missing value
-    # is never stored as 0 or 6.
+    # Both non-standard statuses are present. A missing value is never stored
+    # as 0 or 6; the 6.0 for nicht_erbracht comes from the grading module.
     for index, schueler in enumerate(schuelerliste):
         if index == 1:
             status, notenwert = NoteStatus.NICHT_GEWERTET, None
@@ -248,7 +197,6 @@ def _seed_notengruppen(kurs: Kurs, halbjahr: Halbjahr, schuelerliste: list[Schue
         Note(
             leistung=mitarbeitsnote,
             schueler=schueler,
-            eingabeart=Eingabeart.NOTE,
             notenwert=notenwert,
             status=status,
         )

@@ -23,12 +23,11 @@ from app.db.models import (
     Leistung,
     Note,
     Notengruppe,
-    Notenschluessel,
     Schueler,
     Schuljahr,
 )
 from app.db.session import create_app_engine, create_session_factory
-from app.enums import Eingabeart, NotenschluesselTyp, NoteStatus
+from app.enums import NoteStatus
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -94,23 +93,10 @@ def graph(session) -> SimpleNamespace:
     halbjahr_2 = Halbjahr(
         schuljahr=schuljahr, nummer=2, beginn=date(2027, 2, 1), ende=date(2027, 7, 31)
     )
-    notenschluessel = Notenschluessel(
-        bezeichnung="IHK",
-        typ=NotenschluesselTyp.IHK,
-        schwellen=[
-            {"ab_prozent": "92", "notenwert": "1.0"},
-            {"ab_prozent": "81", "notenwert": "2.0"},
-            {"ab_prozent": "67", "notenwert": "3.0"},
-            {"ab_prozent": "50", "notenwert": "4.0"},
-            {"ab_prozent": "30", "notenwert": "5.0"},
-            {"ab_prozent": "0", "notenwert": "6.0"},
-        ],
-        ist_platzhalter=False,
-    )
     klasse = Klasse(schuljahr=schuljahr, bezeichnung="BFS 26a")
     schueler_a = Schueler(klasse=klasse, vorname="Änne", nachname="Öztürk")
     schueler_b = Schueler(klasse=klasse, vorname="Bernd", nachname="Straßer")
-    kurs = Kurs(klasse=klasse, fach="Deutsch", notenschluessel=notenschluessel)
+    kurs = Kurs(klasse=klasse, fach="Deutsch")
     teilnahme_a = Kursteilnahme(kurs=kurs, schueler=schueler_a)
     teilnahme_b = Kursteilnahme(kurs=kurs, schueler=schueler_b)
     notengruppe = Notengruppe(
@@ -124,27 +110,22 @@ def graph(session) -> SimpleNamespace:
         notengruppe=notengruppe,
         bezeichnung="1. Klassenarbeit",
         datum=date(2026, 9, 15),
-        max_punkte=Decimal("50"),
         gewicht=Decimal("1.0"),
     )
     note = Note(
         leistung=leistung,
         schueler=schueler_a,
-        eingabeart=Eingabeart.PUNKTE,
-        punkte=Decimal("45"),
         notenwert=Decimal("2.0"),
         status=NoteStatus.GEWERTET,
     )
 
     session.add(schuljahr)
-    session.add(notenschluessel)
     session.commit()
 
     return SimpleNamespace(
         schuljahr=schuljahr,
         halbjahr_1=halbjahr_1,
         halbjahr_2=halbjahr_2,
-        notenschluessel=notenschluessel,
         klasse=klasse,
         schueler_a=schueler_a,
         schueler_b=schueler_b,

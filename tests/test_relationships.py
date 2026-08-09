@@ -2,7 +2,7 @@
 
 from sqlalchemy import inspect
 
-from app.db.models import Klasse, Kurs, Schueler, Schuljahr
+from app.db.models import Klasse, Schueler, Schuljahr
 
 
 def test_graph_ist_nach_neuladen_vollstaendig_navigierbar(session, graph):
@@ -49,15 +49,6 @@ def test_foto_wird_nicht_mitgeladen(session, graph):
 
     assert schueler.foto is None  # still reachable, loaded on demand
     assert "foto" not in inspect(schueler).unloaded
-
-
-def test_kurs_ohne_notenschluessel_ist_zulaessig(session, graph):
-    """The course default is optional; an assessment can carry its own key."""
-    kurs = Kurs(klasse_id=graph.klasse.id, fach="Sport")
-    session.add(kurs)
-    session.commit()
-
-    assert session.get(Kurs, kurs.id).notenschluessel is None
 
 
 def test_klasse_gehoert_zu_genau_einem_schuljahr(session, graph):
