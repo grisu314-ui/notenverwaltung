@@ -9,7 +9,7 @@ Maßgeblich ist `notenverwaltung-spezifikation.md`, Arbeitsvorgaben stehen in
 | Bereich | Spezifikation | Stand |
 |---|---|---|
 | Projektstruktur, Datenmodell | 3 | umgesetzt |
-| Notenlogik | 4 | offen |
+| Notenlogik | 4 | umgesetzt in `app/grading/`, noch ohne Aufrufer |
 | Ansichten | 5, 6, 7 | offen |
 | Export | 8 | offen |
 | Backup-Skript, Docker | 2.5 | offen |
@@ -40,9 +40,43 @@ und den Nachbau der genannten Abschnitte.
 
 ## Festlegungen zur Notenlogik (Abschnitt 4)
 
-Entscheidungen des Auftraggebers, die die Spezifikation offen lässt. Sie sind
-noch **nicht umgesetzt** — Abschnitt 4 ist nicht gebaut — und stehen hier,
-damit sie beim Bau nicht neu erraten werden.
+Entscheidungen des Auftraggebers. Umgesetzt in `app/grading/`.
+
+### Abweichungen von Abschnitt 4.4
+
+- **Die Berechnung ist einstufig, nicht zweistufig.** Die Spezifikation
+  beschreibt erst ein Mittel je Notengruppe und dann ein Mittel dieser
+  Gruppenmittel; damit hinge die Wirkung einer Gruppe nicht davon ab, wie
+  viele Noten sie enthält. Gewünscht ist das Gegenteil — viele kleine Noten
+  dürfen stärker wiegen. Gerechnet wird deshalb:
+
+  ```
+  Halbjahresnote = Σ(notenwert × gruppengewicht × leistungsgewicht)
+                   ─────────────────────────────────────────────────
+                   Σ(gruppengewicht × leistungsgewicht)
+  ```
+
+  Gruppengewichte behalten ihre Wirkung: Eine Note in einer mit 70
+  gewichteten Gruppe zählt mehr als eine in einer mit 30 gewichteten. Neu ist
+  nur, dass eine Gruppe mit vier Noten bei gleichem Gruppengewicht eine
+  Gruppe mit einer Note überwiegt. Diese Rechnung trifft den in Testfall T-1
+  genannten Erwartungswert 2,00 exakt, was die zweistufige Regel nicht tut.
+
+- **Eine Nachkommastelle statt zwei.** 4.4 nennt zwei (z. B. 2,43).
+
+- **Gleichstand geht immer zur besseren Note**, nicht kaufmännisch. 4.4 nennt
+  ausdrücklich 2,49 → 2 und 2,50 → 3; hier wird **2,50 zur 2**.
+
+  Beachten: Die ganze Notenstufe wird aus dem auf eine Stelle gerundeten Wert
+  gebildet, damit angezeigte Zahl und Note nie widersprüchlich sind. Durch
+  diese zweifache Rundung liegt die tatsächliche Grenze zur nächsten Note
+  nicht bei einem Rohwert von 2,50, sondern erst oberhalb von 2,55: 2,54 wird
+  zu 2,5 und damit zur 2, erst 2,56 wird zu 2,6 und damit zur 3.
+
+- **Keine Rückrechnung eines Durchschnitts auf eine Tendenznote.** Die Tabelle
+  aus 4.1 dient nur der Eingabe und Anzeige einzelner Noten.
+
+### Weitere Festlegungen
 
 - **Gewichtung der Halbjahre für die Jahresnote: 50/50**, pro Kurs änderbar
   (`kurs.gewicht_halbjahr_1` / `_2`, Vorgabe in `app/db/models.py`).
@@ -59,6 +93,22 @@ damit sie beim Bau nicht neu erraten werden.
   eine Tendenz. Grund: § 53 SchulO laut Abschnitt 4.5; die Überschreibung ist
   der Weg zur Zeugnisnote. Prüfung gehört in die Service-Schicht, das Schema
   erzwingt es nicht.
+- **Leere Notengruppe: kein Gewicht** (O-2). Sie fällt aus der Berechnung;
+  bei der einstufigen Rechnung geschieht das von selbst, weil sie weder in
+  Zähler noch Nenner auftaucht.
+- **Noten aus Halbjahr 1 bleiben in Halbjahr 2 sichtbar** (O-5). Betrifft die
+  Ansichten, Abschnitt 5.
+
+## Layout des Tabellenexports (Abschnitt 8, O-6)
+
+Noch nicht gebaut, hier festgehalten:
+
+- Kopfbereich mit Klasse und Kurs.
+- Pro Zeile ein Schüler.
+- Oberhalb der ersten Schülerzeile mehrere Beschriftungszeilen, die Notenart
+  und Notengruppe kennzeichnen. Der Text dieser Zellen wird um 90° gedreht.
+- Zwischen zwei Notengruppen jeweils eine leere Spalte Abstand, vor den
+  Jahresnoten ebenfalls.
 
 ## Einrichtung
 
@@ -155,9 +205,10 @@ Bei einem Fehlschlag die alten Pins wiederherstellen. Die Anwendung baut keine
 ausgehenden Verbindungen auf; Aktualisierungen sind der einzige Netzzugriff und
 finden nur beim Entwickeln statt.
 
-## Offene Punkte mit Bezug zum Datenmodell
+## Offene Punkte aus Abschnitt 9 der Spezifikation
 
-Beide sind geklärt:
+**Alle acht sind geklärt.** O-2, O-3, O-5 und O-6 stehen weiter oben bei den
+fachlichen Festlegungen; hier die verbleibenden vier:
 
 - **O-1** — entfällt. Es gibt keine Prozentgrenzen, weil es keine Punkteeingabe
   gibt (siehe oben).
@@ -177,7 +228,5 @@ Ebenfalls erledigt: **O-4** entfällt mit der Punkteeingabe („Mitarbeit als
 Punktesystem" ist genau das), **O-8** ist verneint — Kurse bleiben
 klassengebunden, `kurs.klasse_id` ist NOT NULL.
 
-Weiterhin offen und vor der Notenlogik zu klären: **O-2** (Behandlung leerer
-Notengruppen bei der Gewichtung), **O-3** (Rundungsregel und Schwelle für die
-Zeugnisnote), **O-5** (Sichtbarkeit der Noten aus Halbjahr 1 in Halbjahr 2).
-**O-6** (Layout des Tabellenexports) wird erst für Abschnitt 8 gebraucht.
+Die mit **(L)** markierten Punkte wurden nicht anhand der Lehrmeister-App
+beantwortet, sondern vom Auftraggeber direkt entschieden.
