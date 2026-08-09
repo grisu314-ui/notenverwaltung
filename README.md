@@ -38,6 +38,28 @@ Daraus folgt:
 Eine spätere Rückkehr zur Punkteeingabe ist möglich, kostet aber eine Migration
 und den Nachbau der genannten Abschnitte.
 
+## Festlegungen zur Notenlogik (Abschnitt 4)
+
+Entscheidungen des Auftraggebers, die die Spezifikation offen lässt. Sie sind
+noch **nicht umgesetzt** — Abschnitt 4 ist nicht gebaut — und stehen hier,
+damit sie beim Bau nicht neu erraten werden.
+
+- **Gewichtung der Halbjahre für die Jahresnote: 50/50**, pro Kurs änderbar
+  (`kurs.gewicht_halbjahr_1` / `_2`, Vorgabe in `app/db/models.py`).
+- **Die Gewichtung wirkt auf die beiden Halbjahres*noten*, nicht auf die
+  Rohdurchschnitte.** Maßgeblich ist die festgesetzte Halbjahresnote aus
+  `notenueberschreibung`. Ist ein Halbjahr noch nicht festgesetzt, wird für
+  dieses Halbjahr der berechnete Wert herangezogen.
+- **Keine Jahresnote, solange ein Halbjahr keine berechenbare Halbjahresnote
+  hat.** Der praktische Fall ist der Januar: Halbjahr 2 ist leer. Dann wird
+  keine Jahresnote angezeigt — kein Rückfall auf die einzelne Halbjahresnote.
+  Das ist konsistent mit Testfall T-7 (keine Note ⇒ keine Berechnung, leere
+  Anzeige).
+- **Eine Notenüberschreibung ist immer eine ganze Notenstufe 1 bis 6**, nie
+  eine Tendenz. Grund: § 53 SchulO laut Abschnitt 4.5; die Überschreibung ist
+  der Weg zur Zeugnisnote. Prüfung gehört in die Service-Schicht, das Schema
+  erzwingt es nicht.
+
 ## Einrichtung
 
 ```bash
