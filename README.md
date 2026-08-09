@@ -30,6 +30,13 @@ Der Pfad zur SQLite-Datei kommt aus der Umgebungsvariablen
 `NOTENVERWALTUNG_DB`; ohne sie wird `data/notenverwaltung.db` relativ zum
 Arbeitsverzeichnis verwendet. Das ist die einzige Konfiguration der Anwendung.
 
+Das Verzeichnis muss existieren — SQLite legt es nicht an und meldet sonst nur
+`unable to open database file`:
+
+```bash
+mkdir -p data
+```
+
 Schema anlegen oder aktualisieren:
 
 ```bash
