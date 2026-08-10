@@ -9,8 +9,13 @@ Maßgeblich ist `notenverwaltung-spezifikation.md`, Arbeitsvorgaben stehen in
 | Bereich | Spezifikation | Stand |
 |---|---|---|
 | Projektstruktur, Datenmodell | 3 | umgesetzt |
-| Notenlogik | 4 | umgesetzt in `app/grading/`, noch ohne Aufrufer |
-| Ansichten | 5, 6, 7 | offen |
+| Notenlogik | 4 | umgesetzt in `app/grading/` |
+| Web-Fundament, Sortierung, Einstellungen | 5, 6, 10 | umgesetzt (Schritt 5a) |
+| Verwaltungsoberfläche | 5.5 | offen |
+| Klassen- und Schüleransicht, Suche | 5.1, 5.2 | offen |
+| Serieneingabe von Noten | 5.4 | offen |
+| Kurs-/Fachübersicht | 5.3 | offen |
+| Fotoerfassung | 7 | offen |
 | Export | 8 | offen |
 | Backup-Skript, Docker | 2.5 | offen |
 | Löschfunktion | 11 | Kaskaden im Schema vorhanden, Bedienung offen |
@@ -150,6 +155,35 @@ Entwicklungsdatenbank.** Die produktive Datei enthält Klarnamen und Lichtbilder
 und wird im Entwicklungsprozess nicht angefasst. Eine Migration wird vor dem
 produktiven Lauf auf einer Kopie des produktiven Bestands durchgespielt — die
 Kopie über `VACUUM INTO` erzeugen, nie über `cp` auf die laufende Datei.
+
+## Anwendung starten
+
+```bash
+NOTENVERWALTUNG_DB=data/dev.db .venv/bin/uvicorn app.web.app:app --reload
+```
+
+Im Betrieb läuft die Anwendung in einem Container, der über Tailscale
+erreichbar ist. **Die Anwendung hat keine eigene Authentifizierung**, liest
+keinen Identitäts-Header und kennt keine Sitzungen — der Zugang wird
+vollständig davor geregelt. Das ist beabsichtigt und keine Lücke.
+
+Für die Fotoerfassung (Abschnitt 7) ist später ein **gültiges Zertifikat auf
+einem echten Hostnamen** nötig: Der Kamerazugriff funktioniert nur im Secure
+Context, ein Selbstzertifikat oder der Zugriff über eine IP-Adresse reicht
+nicht.
+
+## Mitgelieferte Fremddateien
+
+`app/web/static/htmx.min.js` — htmx 2.0.10, Lizenz 0BSD. Kein CDN, kein npm im
+Build. Aktualisierung von Hand:
+
+```bash
+curl -sS -o /tmp/htmx.tgz https://registry.npmjs.org/htmx.org/-/htmx.org-<version>.tgz
+tar -xzf /tmp/htmx.tgz -C /tmp package/dist/htmx.min.js
+cp /tmp/package/dist/htmx.min.js app/web/static/htmx.min.js
+```
+
+Danach die Version hier im README anpassen.
 
 ## Tests
 

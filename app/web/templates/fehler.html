@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+
+{% block titel %}{{ titel }} – Notenverwaltung{% endblock %}
+
+{% block inhalt %}
+  <h1>{{ titel }}</h1>
+  <p class="fehler">{{ meldung }}</p>
+  <p><a href="/">Zur Startseite</a></p>
+{% endblock %}

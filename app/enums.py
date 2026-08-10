@@ -38,6 +38,20 @@ class UeberschreibungQuelle(StrEnum):
     MANUELL = "manuell"
 
 
+class Sortierung(StrEnum):
+    """Sort order for pupil lists (specification 5.1, 6). Persisted setting."""
+
+    VORNAME = "vorname"
+    NACHNAME = "nachname"
+
+
+class Namensanzeige(StrEnum):
+    """Name display format (specification 6). Persisted setting."""
+
+    VORNAME_NACHNAME = "vorname_nachname"
+    NACHNAME_VORNAME = "nachname_vorname"
+
+
 class HistorieAktion(StrEnum):
     """Kind of change recorded in ``note_historie`` (specification 3.2)."""
 
