@@ -22,14 +22,32 @@ from app.services.fehler import Verwaltungsfehler
 from app.services.settings import lies_einstellungen
 from app.web.dependencies import datenbanksitzung
 from app.web.gemeinsam import VERZEICHNIS, sortiert_nach_bezeichnung, templates
-from app.web.routers import klassen, kurse, notengruppen, schueler, schuljahre, teilnahmen
+from app.web.routers import (
+    ansicht,
+    einstellungen,
+    klassen,
+    kurse,
+    notengruppen,
+    schueler,
+    schuljahre,
+    teilnahmen,
+)
 
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Notenverwaltung", docs_url=None, redoc_url=None)
 app.mount("/static", StaticFiles(directory=VERZEICHNIS / "static"), name="static")
 
-for modul in (schuljahre, klassen, schueler, kurse, notengruppen, teilnahmen):
+for modul in (
+    ansicht,
+    einstellungen,
+    schuljahre,
+    klassen,
+    schueler,
+    kurse,
+    notengruppen,
+    teilnahmen,
+):
     app.include_router(modul.router)
 app.include_router(schuljahre.halbjahr_router)
 

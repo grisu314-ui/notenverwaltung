@@ -12,7 +12,7 @@ Maßgeblich ist `notenverwaltung-spezifikation.md`, Arbeitsvorgaben stehen in
 | Notenlogik | 4 | umgesetzt in `app/grading/` |
 | Web-Fundament, Sortierung, Einstellungen | 5, 6, 10 | umgesetzt (Schritt 5a) |
 | Verwaltungsoberfläche | 5.5 | umgesetzt (Schritt 5b) |
-| Klassen- und Schüleransicht, Suche | 5.1, 5.2 | offen |
+| Klassen- und Schüleransicht, Suche | 5.1, 5.2 | umgesetzt (Schritt 5c) |
 | Serieneingabe von Noten | 5.4 | offen |
 | Kurs-/Fachübersicht | 5.3 | offen |
 | Fotoerfassung | 7 | offen |
@@ -155,6 +155,18 @@ Entwicklungsdatenbank.** Die produktive Datei enthält Klarnamen und Lichtbilder
 und wird im Entwicklungsprozess nicht angefasst. Eine Migration wird vor dem
 produktiven Lauf auf einer Kopie des produktiven Bestands durchgespielt — die
 Kopie über `VACUUM INTO` erzeugen, nie über `cp` auf die laufende Datei.
+
+## Suche
+
+Das Suchfeld im Kopfbereich sucht über **alle Klassen und alle Schuljahre**,
+auch nach ehemaligen Schülern.
+
+Die Suche läuft bewusst nicht über SQL `LIKE`: SQLite ignoriert dort die
+Groß- und Kleinschreibung nur bei ASCII-Zeichen und kennt keine Umlaute.
+Stattdessen werden die Schüler geladen und in Python mit derselben
+Normalisierung gefiltert, die auch die Sortierung verwendet — „ozturk" findet
+damit „Öztürk", „strasser" findet „Straßer". Die Fotospalte ist `deferred` und
+wird dabei nicht mitgeladen.
 
 ## Löschen in der Verwaltung
 

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block titel %}{{ klasse.bezeichnung }} – Notenverwaltung{% endblock %}
+{% block inhalt %}
+  <h1>{{ klasse.bezeichnung }}</h1>
+  <p class="hinweis">
+    Schuljahr {{ klasse.schuljahr.bezeichnung }} ·
+    <a href="/verwaltung/klassen/{{ klasse.id }}">verwalten</a>
+  </p>
+
+  {% include "_umschalter.html" %}
+
+  {% if schueler %}
+    <ul class="kachelliste">
+      {% for s in schueler %}<li>{% include "_kachel.html" %}</li>{% endfor %}
+    </ul>
+  {% else %}
+    <p class="hinweis">
+      Kein aktiver Schüler in dieser Klasse.
+      <a href="/verwaltung/klassen/{{ klasse.id }}">Schüler anlegen</a>
+    </p>
+  {% endif %}
+{% endblock %}

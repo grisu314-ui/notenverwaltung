@@ -1,0 +1,23 @@
+{# Sort order and name display, persisted (specification 5.1, 6). #}
+<div class="umschalter">
+  <form method="post" action="/einstellungen/sortierung" class="zeile">
+    <input type="hidden" name="ziel" value="{{ ziel }}">
+    <label>Sortierung
+      <select name="sortierung" onchange="this.form.submit()">
+        <option value="nachname" {% if einstellungen.sortierung.value == 'nachname' %}selected{% endif %}>nach Nachname</option>
+        <option value="vorname" {% if einstellungen.sortierung.value == 'vorname' %}selected{% endif %}>nach Vorname</option>
+      </select>
+    </label>
+    <noscript><button type="submit">Übernehmen</button></noscript>
+  </form>
+  <form method="post" action="/einstellungen/namensanzeige" class="zeile">
+    <input type="hidden" name="ziel" value="{{ ziel }}">
+    <label>Anzeige
+      <select name="namensanzeige" onchange="this.form.submit()">
+        <option value="nachname_vorname" {% if einstellungen.namensanzeige.value == 'nachname_vorname' %}selected{% endif %}>Nachname, Vorname</option>
+        <option value="vorname_nachname" {% if einstellungen.namensanzeige.value == 'vorname_nachname' %}selected{% endif %}>Vorname Nachname</option>
+      </select>
+    </label>
+    <noscript><button type="submit">Übernehmen</button></noscript>
+  </form>
+</div>

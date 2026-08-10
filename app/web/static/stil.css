@@ -188,3 +188,110 @@ button.gefahr {
   border-radius: 0.25rem;
   padding: 0.75rem;
 }
+
+/* Klassen- und Schüleransicht */
+
+.kopfsuche {
+  flex: 1 1 8rem;
+  margin: 0;
+  min-width: 6rem;
+}
+
+.kopfsuche input {
+  margin-top: 0;
+  min-height: 2.25rem;
+}
+
+.umschalter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: var(--abstand);
+}
+
+.umschalter form {
+  margin: 0;
+}
+
+.schuelerkachel {
+  flex-direction: column;
+  gap: 0.5rem;
+  text-align: center;
+}
+
+.portrait {
+  border-radius: 50%;
+  display: block;
+  height: 4rem;
+  object-fit: cover;
+  width: 4rem;
+}
+
+.portrait.gross {
+  height: 6rem;
+  width: 6rem;
+}
+
+.platzhalter {
+  align-items: center;
+  background: #e7eefc;
+  color: var(--akzent);
+  display: flex;
+  font-size: 1.25rem;
+  font-weight: 600;
+  justify-content: center;
+}
+
+.kachelname {
+  overflow-wrap: anywhere;
+}
+
+.kopfzeile {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  margin-bottom: var(--abstand);
+}
+
+.kopfzeile h1 {
+  margin: 0;
+}
+
+table.noten {
+  border-collapse: collapse;
+  margin-bottom: var(--abstand);
+  width: 100%;
+}
+
+table.noten td,
+table.noten th {
+  border-bottom: 1px solid var(--linie);
+  padding: 0.5rem 0.25rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+table.noten .gruppenzeile th {
+  background: #f4f6fa;
+  font-size: 0.9375rem;
+}
+
+table.noten .ergebniszeile {
+  font-weight: 600;
+}
+
+table.noten .ergebniszeile.jahr td,
+table.noten .ergebniszeile.jahr th {
+  border-bottom: 2px solid var(--schrift);
+}
+
+table.noten .wert {
+  text-align: right;
+  white-space: nowrap;
+}
+
+table.noten .hinweis {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 400;
+}

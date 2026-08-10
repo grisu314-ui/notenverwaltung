@@ -6,12 +6,15 @@ from fastapi import HTTPException
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
+from app.grading.notenwert import als_anzeige
 from app.services.sorting import anzeigename, namensschluessel, vereinfacht
 
 VERZEICHNIS = Path(__file__).resolve().parent
 
 templates = Jinja2Templates(directory=VERZEICHNIS / "templates")
 templates.env.filters["anzeigename"] = anzeigename
+# 0.7 is shown as "1+", never as "0,7" (specification 4.1).
+templates.env.filters["note_anzeige"] = als_anzeige
 
 # Confirmations travel as a key in the URL, never as free text: without
 # sessions there is no flash message, and echoing text from a query string

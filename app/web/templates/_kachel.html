@@ -1,0 +1,9 @@
+{# One pupil tile: photo if there is one, initials otherwise. #}
+<a class="kachel schuelerkachel" href="/schueler/{{ s.id }}">
+  {% if s.foto_geaendert_am %}
+    <img src="/schueler/{{ s.id }}/foto" alt="" class="portrait">
+  {% else %}
+    <span class="portrait platzhalter" aria-hidden="true">{{ (s.vorname[:1] ~ s.nachname[:1]) | upper }}</span>
+  {% endif %}
+  <span class="kachelname">{{ s.vorname | anzeigename(s.nachname, einstellungen.namensanzeige) }}</span>
+</a>
