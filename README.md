@@ -11,7 +11,7 @@ Maßgeblich ist `notenverwaltung-spezifikation.md`, Arbeitsvorgaben stehen in
 | Projektstruktur, Datenmodell | 3 | umgesetzt |
 | Notenlogik | 4 | umgesetzt in `app/grading/` |
 | Web-Fundament, Sortierung, Einstellungen | 5, 6, 10 | umgesetzt (Schritt 5a) |
-| Verwaltungsoberfläche | 5.5 | offen |
+| Verwaltungsoberfläche | 5.5 | umgesetzt (Schritt 5b) |
 | Klassen- und Schüleransicht, Suche | 5.1, 5.2 | offen |
 | Serieneingabe von Noten | 5.4 | offen |
 | Kurs-/Fachübersicht | 5.3 | offen |
@@ -155,6 +155,21 @@ Entwicklungsdatenbank.** Die produktive Datei enthält Klarnamen und Lichtbilder
 und wird im Entwicklungsprozess nicht angefasst. Eine Migration wird vor dem
 produktiven Lauf auf einer Kopie des produktiven Bestands durchgespielt — die
 Kopie über `VACUUM INTO` erzeugen, nie über `cp` auf die laufende Datei.
+
+## Löschen in der Verwaltung
+
+In der Verwaltung lässt sich **nur löschen, was leer ist** — eine Notengruppe
+ohne Leistungen, ein Kurs ohne Notengruppen, eine Klasse ohne Schüler und
+Kurse, ein Schuljahr ohne Klassen, ein Schüler ohne Noten.
+
+Grund: Die Fremdschlüssel im Schema löschen kaskadierend. Ein Knopf
+„Notengruppe löschen" nähme sonst im Zweifel dreißig Noten mit, ohne dass das
+sichtbar wäre. Das endgültige Löschen mit Inhalt gehört in die Löschfunktion
+nach Abschnitt 11 und erhält dort eine Bestätigung mit Angabe der betroffenen
+Datensätze.
+
+Ein Schüler, der die Klasse verlässt, wird **nicht** gelöscht, sondern auf
+inaktiv gesetzt; seine Noten bleiben erhalten.
 
 ## Anwendung starten
 

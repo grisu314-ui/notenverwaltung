@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block titel %}{{ kurs.fach }} – Notenverwaltung{% endblock %}
+{% block inhalt %}
+  <p><a href="/verwaltung/klassen/{{ kurs.klasse_id }}">← Klasse {{ kurs.klasse.bezeichnung }}</a></p>
+  <h1>{{ kurs.fach }} – {{ kurs.klasse.bezeichnung }}</h1>
+  {% include "verwaltung/_meldung.html" %}
+
+  <form method="post" action="/verwaltung/kurse/{{ kurs.id }}">
+    <label>Fach <input name="fach" value="{{ kurs.fach }}" required></label>
+    <label>Notiz <input name="notiz" value="{{ kurs.notiz or '' }}"></label>
+    <label>Gewicht Halbjahr 1 <input name="gewicht_halbjahr_1" value="{{ kurs.gewicht_halbjahr_1 }}" required inputmode="decimal"></label>
+    <label>Gewicht Halbjahr 2 <input name="gewicht_halbjahr_2" value="{{ kurs.gewicht_halbjahr_2 }}" required inputmode="decimal"></label>
+    <button type="submit">Speichern</button>
+  </form>
+
+  <h2>Notengruppen</h2>
+  {% if notengruppen %}
+    {% for gruppe in notengruppen %}
+      <form method="post" action="/verwaltung/notengruppen/{{ gruppe.id }}" class="zeile">
+        <span>{{ gruppe.halbjahr.nummer }}. HJ</span>
+        <label>Bezeichnung <input name="bezeichnung" value="{{ gruppe.bezeichnung }}" required></label>
+        <label>Gewicht <input name="gewicht" value="{{ gruppe.gewicht }}" required inputmode="decimal"></label>
+        <label>Reihenfolge <input name="reihenfolge" type="number" value="{{ gruppe.reihenfolge }}"></label>
+        <button type="submit">Speichern</button>
+      </form>
+      <form method="post" action="/verwaltung/notengruppen/{{ gruppe.id }}/loeschen">
+        <button type="submit" class="gefahr">Notengruppe „{{ gruppe.bezeichnung }}“ löschen</button>
+      </form>
+    {% endfor %}
+  {% else %}
+    <p class="hinweis">Noch keine Notengruppe in diesem Kurs.</p>
+  {% endif %}
+
+  <form method="post" action="/verwaltung/notengruppen/kurs/{{ kurs.id }}">
+    <label>Halbjahr
+      <select name="halbjahr_id">
+        {% for halbjahr in halbjahre %}
+          <option value="{{ halbjahr.id }}">{{ halbjahr.nummer }}. Halbjahr</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Bezeichnung <input name="bezeichnung" required placeholder="Klassenarbeiten"></label>
+    <label>Gewicht <input name="gewicht" required inputmode="decimal" placeholder="50"></label>
+    <label>Reihenfolge <input name="reihenfolge" type="number" value="0"></label>
+    <button type="submit">Notengruppe anlegen</button>
+  </form>
+
+  <h2>Teilnehmer</h2>
+  <ul class="liste">
+    {% for s in schueler %}
+      {% set teilnahme = teilnahme_je_schueler.get(s.id) %}
+      <li>
+        <form method="post" action="/verwaltung/teilnahmen/kurs/{{ kurs.id }}/schueler/{{ s.id }}" class="zeile">
+          <span>{{ s.vorname | anzeigename(s.nachname, einstellungen.namensanzeige) }}</span>
+          <label class="ankreuz">
+            <input type="checkbox" name="ist_aktiv" value="true" {% if teilnahme and teilnahme.ist_aktiv %}checked{% endif %}>
+            nimmt teil
+          </label>
+          <button type="submit">Übernehmen</button>
+        </form>
+      </li>
+    {% endfor %}
+  </ul>
+
+  <form method="post" action="/verwaltung/kurse/{{ kurs.id }}/loeschen">
+    <button type="submit" class="gefahr">Kurs löschen</button>
+  </form>
+{% endblock %}

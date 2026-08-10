@@ -79,6 +79,21 @@ def session(engine):
 
 
 @pytest.fixture
+def client(session):
+    """Test client bound to the temporary database of the session fixture."""
+    from fastapi.testclient import TestClient
+
+    from app.web.app import app
+    from app.web.dependencies import datenbanksitzung
+
+    app.dependency_overrides[datenbanksitzung] = lambda: session
+    try:
+        yield TestClient(app, raise_server_exceptions=False)
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.fixture
 def graph(session) -> SimpleNamespace:
     """A minimal but complete object graph: school year down to a single grade."""
     schuljahr = Schuljahr(

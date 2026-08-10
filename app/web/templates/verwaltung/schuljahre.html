@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block titel %}Schuljahre – Notenverwaltung{% endblock %}
+{% block inhalt %}
+  <h1>Schuljahre</h1>
+  {% include "verwaltung/_meldung.html" %}
+
+  {% if schuljahre %}
+    <ul class="liste">
+      {% for schuljahr in schuljahre %}
+        <li>
+          <a href="/verwaltung/schuljahre/{{ schuljahr.id }}">{{ schuljahr.bezeichnung }}</a>
+          {% if schuljahr.ist_aktiv %}<span class="marker">aktiv</span>{% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="hinweis">Noch kein Schuljahr angelegt.</p>
+  {% endif %}
+
+  <h2>Neues Schuljahr</h2>
+  <form method="post" action="/verwaltung/schuljahre">
+    <label>Bezeichnung <input name="bezeichnung" required placeholder="2026/27"></label>
+    <label>Beginn <input type="date" name="beginn" required></label>
+    <label>Ende <input type="date" name="ende" required></label>
+    <label class="ankreuz"><input type="checkbox" name="ist_aktiv" value="true"> als aktives Schuljahr setzen</label>
+    <button type="submit">Anlegen</button>
+  </form>
+  <p class="hinweis">Beide Halbjahre werden automatisch mit angelegt und lassen sich danach anpassen.</p>
+{% endblock %}
