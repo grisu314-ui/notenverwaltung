@@ -15,7 +15,7 @@ Maßgeblich ist `notenverwaltung-spezifikation.md`, Arbeitsvorgaben stehen in
 | Klassen- und Schüleransicht, Suche | 5.1, 5.2 | umgesetzt (Schritt 5c) |
 | Serieneingabe von Noten, Änderungshistorie | 5.4, 3.2 | umgesetzt (Schritt 5d) |
 | Kurs-/Fachübersicht | 5.3 | umgesetzt (Schritt 5e) |
-| Fotoerfassung | 7 | offen |
+| Fotoerfassung | 7 | umgesetzt (Schritt 5f) |
 | Export | 8 | offen |
 | Backup-Skript, Docker | 2.5 | offen |
 | Löschfunktion | 11 | Kaskaden im Schema vorhanden, Bedienung offen |
@@ -143,8 +143,8 @@ Schema anlegen oder aktualisieren:
 NOTENVERWALTUNG_DB=data/dev.db .venv/bin/alembic upgrade head
 ```
 
-Entwicklungsdaten einspielen (erfundene Namen, keine Fotos, bricht bei einer
-nicht leeren Datenbank ab):
+Entwicklungsdaten einspielen (erfundene Namen, erzeugte Platzhalterbilder,
+bricht bei einer nicht leeren Datenbank ab):
 
 ```bash
 NOTENVERWALTUNG_DB=data/dev.db .venv/bin/python scripts/seed_dev.py
@@ -155,6 +155,44 @@ Entwicklungsdatenbank.** Die produktive Datei enthält Klarnamen und Lichtbilder
 und wird im Entwicklungsprozess nicht angefasst. Eine Migration wird vor dem
 produktiven Lauf auf einer Kopie des produktiven Bestands durchgespielt — die
 Kopie über `VACUUM INTO` erzeugen, nie über `cp` auf die laufende Datei.
+
+## Fotoerfassung
+
+Auf der Schülerbearbeitung: „Foto aufnehmen" öffnet über
+`<input type="file" accept="image/*" capture="environment">` die Kamera,
+danach wird im Browser quadratisch zugeschnitten und als 512 × 512 JPEG
+hochgeladen.
+
+**Zuschneiden ohne Fremdbibliothek und ohne Pinch-Zoom.** Ziehen verschiebt
+das Bild, ein Schieberegler ändert die Größe. Grund: Im Unterricht wird das
+Telefon einhändig gehalten, und ein Regler ist so bedienbar, zwei Finger sind
+es nicht.
+
+**Serverseitig wird jedes Bild neu kodiert**, nicht durchgereicht. Das ist es,
+was eingebettete Metadaten und in eine gültige Bilddatei geschmuggelte Inhalte
+entfernt:
+
+| Prüfung | Grenze |
+|---|---|
+| Dateigröße | 2 MB, geprüft vor dem Dekodieren |
+| Typ | aus den Bytes, **nicht** aus dem gemeldeten Typ; nur JPEG und PNG |
+| Bildpunkte | 40 Millionen — ein 20-kB-PNG kann sonst zu Gigapixeln aufgehen |
+| Ausgabe | RGB, höchstens 512 × 512, JPEG Qualität 80, ohne EXIF |
+
+Die EXIF-Orientierung wird angewendet, **bevor** die Metadaten verworfen
+werden — sonst liegt ein Hochkantfoto quer. Transparenz wird auf Weiß
+gelegt statt auf Schwarz.
+
+Der vom Client gelieferte Dateiname wird nirgends verwendet; gespeichert wird
+ein BLOB.
+
+Größenordnung: ein Platzhalterbild wiegt rund 7 kB, ein echtes Porträt eher
+40 bis 60 kB. Bei dreihundert Schülern bleibt die Datenbank damit im niedrigen
+zweistelligen MB-Bereich, wie in Abschnitt 7 der Spezifikation geschätzt.
+
+**Offen bis zum Test am Gerät:** ob `capture` ohne HTTPS greift. Falls nicht,
+öffnet sich statt der Kamera der normale Auswahldialog, in dem die Kamera-App
+als Quelle wählbar ist — ein Tipper mehr, kein Ausfall.
 
 ## Speicherbestätigung — Abnahmetest von Hand
 

@@ -15,6 +15,50 @@
   </form>
   <p class="hinweis">Verlässt ein Schüler die Klasse, wird der Haken entfernt statt gelöscht — die Noten bleiben erhalten.</p>
 
+  <h2>Foto</h2>
+  <div id="fotoaufnahme" data-ziel="/verwaltung/schueler/{{ schueler.id }}/foto">
+    {% if schueler.foto_geaendert_am %}
+      <img src="/schueler/{{ schueler.id }}/foto" alt="" class="portrait gross">
+      <form method="post" action="/verwaltung/schueler/{{ schueler.id }}/foto/loeschen">
+        <button type="submit" class="gefahr">Foto entfernen</button>
+      </form>
+    {% else %}
+      <p class="hinweis">Noch kein Foto hinterlegt.</p>
+    {% endif %}
+
+    <label>Foto aufnehmen
+      <input type="file" accept="image/*" capture="environment">
+    </label>
+
+    <div data-rolle="werkzeuge" hidden>
+      <canvas width="512" height="512" class="zuschnitt"></canvas>
+      <label>Größe
+        <input type="range" min="1" max="4" step="0.01" value="1">
+      </label>
+      <button type="button" data-rolle="speichern">Foto speichern</button>
+      <button type="button" data-rolle="abbrechen" class="gefahr">Verwerfen</button>
+    </div>
+    <p data-rolle="meldung" class="hinweis"></p>
+
+    <noscript>
+      <p class="fehler">
+        Ohne JavaScript lässt sich das Bild nicht zuschneiden. Sie können
+        trotzdem eine fertige quadratische Bilddatei hochladen:
+      </p>
+      <form method="post" action="/verwaltung/schueler/{{ schueler.id }}/foto"
+            enctype="multipart/form-data">
+        <input type="file" name="datei" accept="image/jpeg,image/png" required>
+        <button type="submit">Hochladen</button>
+      </form>
+    </noscript>
+  </div>
+  <p class="hinweis">
+    Das Bild wird auf höchstens 512 × 512 verkleinert, serverseitig neu
+    kodiert und in der Datenbank gespeichert. Eingebettete Metadaten fallen
+    dabei weg.
+  </p>
+  <script src="/static/zuschnitt.js" defer></script>
+
   <form method="post" action="/verwaltung/schueler/{{ schueler.id }}/loeschen">
     <button type="submit" class="gefahr">Schüler löschen</button>
   </form>
