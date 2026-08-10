@@ -25,6 +25,7 @@ from app.web.gemeinsam import VERZEICHNIS, sortiert_nach_bezeichnung, templates
 from app.web.routers import (
     ansicht,
     einstellungen,
+    export,
     klassen,
     noten,
     kurse,
@@ -42,6 +43,7 @@ app.mount("/static", StaticFiles(directory=VERZEICHNIS / "static"), name="static
 for modul in (
     ansicht,
     einstellungen,
+    export,
     noten,
     schuljahre,
     klassen,

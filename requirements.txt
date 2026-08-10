@@ -7,3 +7,5 @@ Jinja2==3.1.6
 python-multipart==0.0.32
 # Bilder dekodieren, drehen, verkleinern und neu kodieren (Abschnitt 7).
 Pillow==12.3.0
+# Tabellenexport nach XLSX (Abschnitt 8).
+openpyxl==3.1.5
