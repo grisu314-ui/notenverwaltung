@@ -89,18 +89,6 @@ def aendern(
     )
 
 
-@router.post("/{schueler_id}/loeschen")
-def loeschen(schueler_id: int, session: Session = Depends(datenbanksitzung)):
-    schueler = hole(session, Schueler, schueler_id)
-    klasse_id = schueler.klasse_id
-    with uebersetzte_datenbankfehler(session):
-        verwaltung.loesche_schueler(session, schueler)
-        session.commit()
-    return RedirectResponse(
-        f"/verwaltung/klassen/{klasse_id}?meldung=geloescht", WEITERLEITUNG
-    )
-
-
 @router.post("/{schueler_id}/foto")
 def foto_speichern(
     schueler_id: int,

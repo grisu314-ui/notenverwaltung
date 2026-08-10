@@ -45,7 +45,10 @@
     <button type="submit">Klasse anlegen</button>
   </form>
 
-  <form method="post" action="/verwaltung/schuljahre/{{ schuljahr.id }}/loeschen">
-    <button type="submit" class="gefahr">Schuljahr löschen</button>
-  </form>
+  <h2>Endgültig löschen</h2>
+  <p class="hinweis">
+    Entfernt das Schuljahr mit allen Klassen, Schülern, Kursen, Noten, Fotos
+    und der Änderungshistorie. Die nächste Seite zeigt, was genau verschwindet.
+  </p>
+  <p><a class="kachel gefahrlink" href="/verwaltung/loeschen/schuljahre/{{ schuljahr.id }}">Löschen vorbereiten</a></p>
 {% endblock %}

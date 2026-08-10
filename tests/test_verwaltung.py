@@ -179,32 +179,10 @@ def test_kurs_mit_notengruppen_laesst_sich_nicht_loeschen(session, graph):
         verwaltung.loesche_kurs(session, graph.kurs)
 
 
-def test_schueler_mit_noten_laesst_sich_nicht_loeschen(session, graph):
-    with pytest.raises(Verwaltungsfehler) as fehler:
-        verwaltung.loesche_schueler(session, graph.schueler_a)
-    assert "Noten" in str(fehler.value)
-
-
 def test_klasse_mit_schuelern_laesst_sich_nicht_loeschen(session, graph):
     with pytest.raises(Verwaltungsfehler):
         verwaltung.loesche_klasse(session, graph.klasse)
 
 
-def test_schuljahr_mit_klassen_laesst_sich_nicht_loeschen(session, graph):
-    with pytest.raises(Verwaltungsfehler):
-        verwaltung.loesche_schuljahr(session, graph.schuljahr)
-
-
-def test_leeres_schuljahr_laesst_sich_loeschen(session):
-    schuljahr = _schuljahr(session, "2030/31")
-    session.commit()
-    schuljahr_id = schuljahr.id
-
-    verwaltung.loesche_schuljahr(session, schuljahr)
-    session.commit()
-
-    assert session.get(Schuljahr, schuljahr_id) is None
-    # The two terms went with it, through the cascade.
-    assert (
-        session.query(Halbjahr).filter_by(schuljahr_id=schuljahr_id).count() == 0
-    )
+# Schüler und Schuljahre werden nicht mehr hier gelöscht, sondern über die
+# Löschfunktion aus Abschnitt 11 -- siehe tests/test_loeschen.py.

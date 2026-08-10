@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block titel %}{{ titel }}{% endblock %}
+{% block inhalt %}
+  <p><a href="{{ zurueck }}">← Zurück, ohne zu löschen</a></p>
+  <h1>{{ titel }}</h1>
+
+  <p class="fehler">
+    <strong>Das lässt sich nicht rückgängig machen.</strong>
+    <span>
+      Vorhandene Sicherungen enthalten die Daten weiterhin — sie verschwinden
+      dort erst, wenn die aufbewahrten Stände durchgelaufen sind.
+    </span>
+  </p>
+
+  <h2>Dabei werden entfernt</h2>
+  <table class="noten">
+    <tbody>
+      {% for name, anzahl in umfang.posten %}
+        <tr>
+          <th>{{ name }}</th>
+          <td class="wert">{{ anzahl }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <form method="post" action="{{ ziel }}">
+    <label>
+      Zur Bestätigung „{{ erwartet }}“ eintippen
+      <input name="bestaetigung" autocomplete="off" autocapitalize="off" required>
+    </label>
+    <button type="submit" class="gefahr">Endgültig löschen</button>
+  </form>
+{% endblock %}

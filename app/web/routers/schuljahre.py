@@ -93,15 +93,6 @@ def aktiv_setzen(schuljahr_id: int, session: Session = Depends(datenbanksitzung)
     )
 
 
-@router.post("/{schuljahr_id}/loeschen")
-def loeschen(schuljahr_id: int, session: Session = Depends(datenbanksitzung)):
-    schuljahr = hole(session, Schuljahr, schuljahr_id)
-    with uebersetzte_datenbankfehler(session):
-        verwaltung.loesche_schuljahr(session, schuljahr)
-        session.commit()
-    return RedirectResponse("/verwaltung/schuljahre?meldung=geloescht", WEITERLEITUNG)
-
-
 @halbjahr_router.post("/{halbjahr_id}")
 def halbjahr_aendern(
     halbjahr_id: int,

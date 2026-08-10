@@ -38,6 +38,13 @@ BESTAETIGUNGEN = {
     "angelegt": "Angelegt.",
     "gespeichert": "Gespeichert.",
     "geloescht": "Gelöscht.",
+    # The rows are gone, only the compaction afterwards failed. Saying just
+    # "Gelöscht." would hide that the bytes are still in the file.
+    "geloescht_ohne_verdichten": (
+        "Gelöscht — die Datenbank ließ sich danach aber nicht verdichten. "
+        "Die Daten sind aus der Anwendung entfernt, ihre Bytes stehen noch in "
+        "der Datei. Der Grund steht im Anwendungsprotokoll."
+    ),
     "aktiviert": "Als aktives Schuljahr gesetzt.",
 }
 
