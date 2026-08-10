@@ -432,3 +432,29 @@ table.matrix .hinweis {
 table.matrix.spiegel .wert {
   text-align: center;
 }
+
+/* Fotoerfassung */
+
+.zuschnitt {
+  background: #f4f6fa;
+  border: 1px solid var(--linie);
+  border-radius: 0.5rem;
+  cursor: grab;
+  display: block;
+  height: auto;
+  max-width: 18rem;
+  touch-action: none; /* sonst scrollt die Seite beim Ziehen */
+  width: 100%;
+}
+
+#fotoaufnahme input[type="range"] {
+  padding: 0;
+}
+
+#fotoaufnahme [data-rolle="meldung"].fehler {
+  background: var(--fehler-grund);
+  border-left: 4px solid var(--fehler-linie);
+  color: var(--fehler-linie);
+  font-weight: 700;
+  padding: 0.5rem;
+}

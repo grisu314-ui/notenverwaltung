@@ -3,9 +3,8 @@
 Local development, tests and migration rehearsals run against this and never
 against the productive file, which holds real names and photographs.
 
-All names here are invented. Photos are not seeded: re-encoding images needs
-Pillow, which arrives with the photo capture step (specification section 7);
-``schueler.foto`` stays NULL until then.
+All names here are invented and the photos are generated placeholders -- a
+coloured square with the initials, never a real portrait.
 
 Usage:
 
@@ -14,11 +13,13 @@ Usage:
 
 import sys
 from datetime import date
+from io import BytesIO
 from decimal import Decimal
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from PIL import Image, ImageDraw, ImageFont  # noqa: E402
 from sqlalchemy.engine import Engine  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
@@ -34,7 +35,9 @@ from app.db.models import (  # noqa: E402
     Schueler,
     Schuljahr,
 )
+from app.clock import utc_now  # noqa: E402
 from app.db.session import create_app_engine, create_session_factory  # noqa: E402
+from app.services.foto import verarbeite  # noqa: E402
 from app.enums import NoteStatus  # noqa: E402
 
 NAMEN_BFS = [
@@ -65,6 +68,34 @@ NOTENWERTE_KLASSENARBEIT = [
 ]
 
 TABELLEN_DIE_LEER_SEIN_MUESSEN = ("schuljahr", "schueler", "note")
+
+# Placeholder tints, cycled through. Invented data must be recognisable as
+# invented at a glance.
+FARBEN = [
+    (206, 221, 240),
+    (214, 235, 214),
+    (243, 226, 205),
+    (233, 213, 236),
+    (208, 234, 236),
+    (240, 226, 210),
+]
+
+
+def platzhalterbild(vorname: str, nachname: str, nummer: int) -> bytes:
+    """A tinted square with the initials -- never a real photograph."""
+    bild = Image.new("RGB", (512, 512), FARBEN[nummer % len(FARBEN)])
+    stift = ImageDraw.Draw(bild)
+    stift.text(
+        (256, 256),
+        f"{vorname[:1]}{nachname[:1]}".upper(),
+        font=ImageFont.load_default(size=200),
+        fill=(60, 70, 90),
+        anchor="mm",
+    )
+    puffer = BytesIO()
+    bild.save(puffer, format="PNG")
+    # Through the same path as an upload, so the seed exercises it too.
+    return verarbeite(puffer.getvalue())
 
 
 class DatenbankNichtLeerError(RuntimeError):
@@ -116,6 +147,8 @@ def seed(engine: Engine) -> None:
                     nachname=nachname,
                     listennummer=nummer,
                     ist_aktiv=True,
+                    foto=platzhalterbild(vorname, nachname, nummer),
+                    foto_geaendert_am=utc_now(),
                 )
                 for nummer, (vorname, nachname) in enumerate(namen, start=1)
             ]
