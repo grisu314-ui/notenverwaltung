@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block titel %}{{ schueler.vorname }} {{ schueler.nachname }} – Notenverwaltung{% endblock %}
+{% block inhalt %}
+  <p><a href="/verwaltung/klassen/{{ schueler.klasse_id }}">← Klasse {{ schueler.klasse.bezeichnung }}</a></p>
+  <h1>{{ schueler.vorname }} {{ schueler.nachname }}</h1>
+  {% include "verwaltung/_meldung.html" %}
+
+  <form method="post" action="/verwaltung/schueler/{{ schueler.id }}">
+    <label>Vorname <input name="vorname" value="{{ schueler.vorname }}" required></label>
+    <label>Nachname <input name="nachname" value="{{ schueler.nachname }}" required></label>
+    <label>Listennummer <input name="listennummer" inputmode="numeric" value="{{ schueler.listennummer if schueler.listennummer is not none else '' }}"></label>
+    <label>Notiz <input name="notiz" value="{{ schueler.notiz or '' }}"></label>
+    <label class="ankreuz"><input type="checkbox" name="ist_aktiv" value="true" {% if schueler.ist_aktiv %}checked{% endif %}> aktiv</label>
+    <button type="submit">Speichern</button>
+  </form>
+  <p class="hinweis">Verlässt ein Schüler die Klasse, wird der Haken entfernt statt gelöscht — die Noten bleiben erhalten.</p>
+
+  <form method="post" action="/verwaltung/schueler/{{ schueler.id }}/loeschen">
+    <button type="submit" class="gefahr">Schüler löschen</button>
+  </form>
+{% endblock %}

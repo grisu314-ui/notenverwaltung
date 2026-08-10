@@ -2,22 +2,8 @@
 
 import logging
 
-import pytest
-from fastapi.testclient import TestClient
-
 from app.db.models import Klasse
 from app.web.app import app
-from app.web.dependencies import datenbanksitzung
-
-
-@pytest.fixture
-def client(session):
-    """Test client bound to the temporary database of the session fixture."""
-    app.dependency_overrides[datenbanksitzung] = lambda: session
-    try:
-        yield TestClient(app, raise_server_exceptions=False)
-    finally:
-        app.dependency_overrides.clear()
 
 
 def test_startseite_zeigt_das_aktive_schuljahr(client, graph):

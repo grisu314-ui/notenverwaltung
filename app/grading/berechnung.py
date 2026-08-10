@@ -96,13 +96,22 @@ class Ergebnis:
     ganze_note: int
 
 
-def _rechenwert(note: Einzelnote) -> Decimal | None:
-    """The value a grade contributes, or None if it does not enter at all."""
-    if note.status == NoteStatus.NICHT_GEWERTET:
+def beitrag(status: NoteStatus, notenwert: Decimal | None) -> Decimal | None:
+    """The value a grade contributes, or None if it does not enter at all.
+
+    Public because the class statistics of the course overview have to follow
+    exactly the same rule; two places deciding what counts would eventually
+    disagree.
+    """
+    if status == NoteStatus.NICHT_GEWERTET:
         return None
-    if note.status == NoteStatus.NICHT_ERBRACHT:
+    if status == NoteStatus.NICHT_ERBRACHT:
         return WERT_NICHT_ERBRACHT
-    return note.notenwert
+    return notenwert
+
+
+def _rechenwert(note: Einzelnote) -> Decimal | None:
+    return beitrag(note.status, note.notenwert)
 
 
 def _gewichtetes_mittel(paare: Sequence[tuple[Decimal, Decimal]]) -> Decimal | None:

@@ -9,29 +9,49 @@ All user-visible text is German; identifiers and comments are English.
 """
 
 import logging
-from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.db.models import Klasse, Schuljahr
+from app.services.fehler import Verwaltungsfehler
 from app.services.settings import lies_einstellungen
-from app.services.sorting import anzeigename, vereinfacht
 from app.web.dependencies import datenbanksitzung
+from app.web.gemeinsam import VERZEICHNIS, sortiert_nach_bezeichnung, templates
+from app.web.routers import (
+    ansicht,
+    einstellungen,
+    klassen,
+    noten,
+    kurse,
+    notengruppen,
+    schueler,
+    schuljahre,
+    teilnahmen,
+)
 
 logger = logging.getLogger(__name__)
-
-VERZEICHNIS = Path(__file__).resolve().parent
 
 app = FastAPI(title="Notenverwaltung", docs_url=None, redoc_url=None)
 app.mount("/static", StaticFiles(directory=VERZEICHNIS / "static"), name="static")
 
-templates = Jinja2Templates(directory=VERZEICHNIS / "templates")
-templates.env.filters["anzeigename"] = anzeigename
+for modul in (
+    ansicht,
+    einstellungen,
+    noten,
+    schuljahre,
+    klassen,
+    schueler,
+    kurse,
+    notengruppen,
+    teilnahmen,
+):
+    app.include_router(modul.router)
+app.include_router(schuljahre.halbjahr_router)
 
 
 def _ist_htmx(request: Request) -> bool:
@@ -46,6 +66,31 @@ def _fehlerantwort(request: Request, titel: str, meldung: str, status: int):
         name=vorlage,
         context={"titel": titel, "meldung": meldung},
         status_code=status,
+    )
+
+
+@app.exception_handler(Verwaltungsfehler)
+async def verwaltungsfehler(request: Request, exc: Verwaltungsfehler):
+    """Refused input: the message is meant for the user and is shown as is."""
+    logger.info("Eingabe abgewiesen bei %s: %s", request.url, exc)
+    return _fehlerantwort(request, "Eingabe nicht möglich", str(exc), 400)
+
+
+@app.exception_handler(RequestValidationError)
+async def eingabefehler(request: Request, exc: RequestValidationError):
+    """A malformed form must not answer with raw JSON.
+
+    FastAPI's default handler returns a 422 with a JSON body describing the
+    fields. In a server-rendered German interface that is neither readable nor
+    expected.
+    """
+    logger.info("Unvollständige Anfrage bei %s: %s", request.url, exc.errors())
+    return _fehlerantwort(
+        request,
+        "Eingabe unvollständig",
+        "Die Anfrage enthielt nicht alle erwarteten Felder, oder ein Feld hatte "
+        "ein unerwartetes Format — etwa ein unvollständiges Datum.",
+        400,
     )
 
 
@@ -79,10 +124,9 @@ async def unerwarteter_fehler(request: Request, exc: Exception):
 def startseite(request: Request, session: Session = Depends(datenbanksitzung)):
     einstellungen = lies_einstellungen(session)
     schuljahr = session.query(Schuljahr).filter_by(ist_aktiv=True).first()
-    klassen = (
-        sorted(
-            session.query(Klasse).filter_by(schuljahr_id=schuljahr.id).all(),
-            key=lambda klasse: (vereinfacht(klasse.bezeichnung), klasse.bezeichnung),
+    klassen_des_jahres = (
+        sortiert_nach_bezeichnung(
+            session.query(Klasse).filter_by(schuljahr_id=schuljahr.id).all()
         )
         if schuljahr is not None
         else []
@@ -92,7 +136,14 @@ def startseite(request: Request, session: Session = Depends(datenbanksitzung)):
         name="start.html",
         context={
             "schuljahr": schuljahr,
-            "klassen": klassen,
+            "klassen": klassen_des_jahres,
             "einstellungen": einstellungen,
         },
+    )
+
+
+@app.get("/verwaltung", response_class=HTMLResponse)
+def verwaltung_start(request: Request):
+    return templates.TemplateResponse(
+        request=request, name="verwaltung/start.html", context={}
     )

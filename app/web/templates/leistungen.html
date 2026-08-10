@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block titel %}{{ kurs.fach }} – Leistungen{% endblock %}
+{% block inhalt %}
+  <p><a href="/klassen/{{ kurs.klasse_id }}">← {{ kurs.klasse.bezeichnung }}</a></p>
+  <h1>{{ kurs.fach }} – Leistungen</h1>
+  {% include "verwaltung/_meldung.html" %}
+
+  {% if not notengruppen %}
+    <p class="hinweis">
+      Für diesen Kurs gibt es noch keine Notengruppe.
+      <a href="/verwaltung/kurse/{{ kurs.id }}">Notengruppe anlegen</a>
+    </p>
+  {% endif %}
+
+  {% for gruppe in notengruppen %}
+    <h2>{{ gruppe.halbjahr.nummer }}. Halbjahr · {{ gruppe.bezeichnung }}
+      <span class="hinweis">Gewicht {{ gruppe.gewicht }}</span>
+    </h2>
+    {% if gruppe.leistungen %}
+      <ul class="liste">
+        {% for leistung in gruppe.leistungen | sort(attribute='datum') %}
+          <li>
+            <a href="/leistungen/{{ leistung.id }}">{{ leistung.bezeichnung }}</a>
+            <span class="hinweis">{{ leistung.datum.strftime('%d.%m.%Y') }} · {{ leistung.noten | length }} Noten</span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+    <form method="post" action="/notengruppen/{{ gruppe.id }}/leistungen" class="zeile">
+      <label>Neue Leistung <input name="bezeichnung" required placeholder="1. Klassenarbeit"></label>
+      <label>Datum <input type="date" name="datum" value="{{ heute }}" required></label>
+      <label>Gewicht <input name="gewicht" value="1.0" inputmode="decimal"></label>
+      <button type="submit">Anlegen</button>
+    </form>
+  {% endfor %}
+{% endblock %}

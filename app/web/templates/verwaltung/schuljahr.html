@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block titel %}{{ schuljahr.bezeichnung }} – Notenverwaltung{% endblock %}
+{% block inhalt %}
+  <p><a href="/verwaltung/schuljahre">← Schuljahre</a></p>
+  <h1>Schuljahr {{ schuljahr.bezeichnung }}{% if schuljahr.ist_aktiv %} <span class="marker">aktiv</span>{% endif %}</h1>
+  {% include "verwaltung/_meldung.html" %}
+
+  <form method="post" action="/verwaltung/schuljahre/{{ schuljahr.id }}">
+    <label>Bezeichnung <input name="bezeichnung" value="{{ schuljahr.bezeichnung }}" required></label>
+    <label>Beginn <input type="date" name="beginn" value="{{ schuljahr.beginn }}" required></label>
+    <label>Ende <input type="date" name="ende" value="{{ schuljahr.ende }}" required></label>
+    <button type="submit">Speichern</button>
+  </form>
+
+  {% if not schuljahr.ist_aktiv %}
+    <form method="post" action="/verwaltung/schuljahre/{{ schuljahr.id }}/aktiv">
+      <button type="submit">Als aktives Schuljahr setzen</button>
+    </form>
+  {% endif %}
+
+  <h2>Halbjahre</h2>
+  {% for halbjahr in schuljahr.halbjahre %}
+    <form method="post" action="/verwaltung/halbjahre/{{ halbjahr.id }}" class="zeile">
+      <span>{{ halbjahr.nummer }}. Halbjahr</span>
+      <label>Beginn <input type="date" name="beginn" value="{{ halbjahr.beginn }}" required></label>
+      <label>Ende <input type="date" name="ende" value="{{ halbjahr.ende }}" required></label>
+      <button type="submit">Speichern</button>
+    </form>
+  {% endfor %}
+
+  <h2>Klassen</h2>
+  {% if schuljahr.klassen %}
+    <ul class="liste">
+      {% for klasse in schuljahr.klassen %}
+        <li><a href="/verwaltung/klassen/{{ klasse.id }}">{{ klasse.bezeichnung }}</a></li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="hinweis">Noch keine Klasse in diesem Schuljahr.</p>
+  {% endif %}
+
+  <form method="post" action="/verwaltung/klassen/schuljahr/{{ schuljahr.id }}">
+    <label>Neue Klasse <input name="bezeichnung" required placeholder="BFS 26a"></label>
+    <label>Notiz <input name="notiz"></label>
+    <button type="submit">Klasse anlegen</button>
+  </form>
+
+  <form method="post" action="/verwaltung/schuljahre/{{ schuljahr.id }}/loeschen">
+    <button type="submit" class="gefahr">Schuljahr löschen</button>
+  </form>
+{% endblock %}

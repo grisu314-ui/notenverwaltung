@@ -11,10 +11,10 @@ Maßgeblich ist `notenverwaltung-spezifikation.md`, Arbeitsvorgaben stehen in
 | Projektstruktur, Datenmodell | 3 | umgesetzt |
 | Notenlogik | 4 | umgesetzt in `app/grading/` |
 | Web-Fundament, Sortierung, Einstellungen | 5, 6, 10 | umgesetzt (Schritt 5a) |
-| Verwaltungsoberfläche | 5.5 | offen |
-| Klassen- und Schüleransicht, Suche | 5.1, 5.2 | offen |
-| Serieneingabe von Noten | 5.4 | offen |
-| Kurs-/Fachübersicht | 5.3 | offen |
+| Verwaltungsoberfläche | 5.5 | umgesetzt (Schritt 5b) |
+| Klassen- und Schüleransicht, Suche | 5.1, 5.2 | umgesetzt (Schritt 5c) |
+| Serieneingabe von Noten, Änderungshistorie | 5.4, 3.2 | umgesetzt (Schritt 5d) |
+| Kurs-/Fachübersicht | 5.3 | umgesetzt (Schritt 5e) |
 | Fotoerfassung | 7 | offen |
 | Export | 8 | offen |
 | Backup-Skript, Docker | 2.5 | offen |
@@ -155,6 +155,105 @@ Entwicklungsdatenbank.** Die produktive Datei enthält Klarnamen und Lichtbilder
 und wird im Entwicklungsprozess nicht angefasst. Eine Migration wird vor dem
 produktiven Lauf auf einer Kopie des produktiven Bestands durchgespielt — die
 Kopie über `VACUUM INTO` erzeugen, nie über `cp` auf die laufende Datei.
+
+## Speicherbestätigung — Abnahmetest von Hand
+
+Abschnitt 10 der Spezifikation nennt das stille Verwerfen einer Note beim
+Verbindungsabbruch den gravierendsten denkbaren Fehler dieser Anwendung. Die
+Eingabemaske ist danach gebaut: Eine Zeile zeigt „gespeichert" mit Uhrzeit
+**erst dann**, wenn der Server nach erfolgreichem Schreiben geantwortet hat.
+Die Bestätigung wird aus dem gespeicherten Datensatz gerendert, nicht aus der
+Anfrage.
+
+**Automatisierte Tests können den entscheidenden Fall nicht prüfen** — was der
+Browser bei abgerissener Verbindung anzeigt. Dafür dieser Durchlauf, der nach
+jeder Änderung an der Eingabemaske zu wiederholen ist:
+
+1. Eingabemaske einer Leistung auf dem Handy öffnen, eine Note auswählen.
+   → Die Zeile zeigt „gespeichert" mit Uhrzeit.
+2. **Flugmodus einschalten**, bei einem anderen Schüler eine Note auswählen.
+   → Die Zeile wird rot und zeigt „NICHT gespeichert – keine Verbindung".
+3. Seite zu verlassen versuchen.
+   → Der Browser fragt nach, ob die Seite wirklich verlassen werden soll.
+4. Flugmodus aus, Seite neu laden.
+   → Die erste Note steht da, die zweite nicht — und das war vorher sichtbar.
+
+Ohne Schritt 2 und 3 gilt eine Änderung an der Eingabemaske nicht als
+abgenommen.
+
+Fällt JavaScript ganz aus, bleibt jede Zeile ein gewöhnliches Formular mit
+Absendeknopf; die Seite lädt neu und zeigt den gespeicherten Stand. Auch ein
+JS-Fehler kann damit keine Note still verschlucken.
+
+## Kursübersicht — bewusste Abweichung von 5.3
+
+Die Spezifikation nennt in 5.3 eine Spalte „Gruppenmittel". **Die gibt es
+nicht.** Seit die Berechnung einstufig ist, kommt ein Mittel je Notengruppe
+darin nicht mehr vor, und das Gesamtmittel ist ausdrücklich *nicht* der
+gewichtete Mittelwert solcher Gruppenmittel. Eine Spalte, die zum Nachrechnen
+einlädt und dabei nicht aufgeht, richtet mehr Schaden an als Nutzen.
+
+Sichtbar bleibt die **Gruppengewichtung**, wie in 5.3 gefordert.
+
+### Notenspiegel
+
+Unter der Matrix steht je Leistung eine Zeile mit Durchschnitt und der
+Verteilung auf die Notenstufen 1 bis 6:
+
+- Tendenznoten zählen zu ihrer ganzen Stufe — 2+ und 2− stehen beide in
+  Spalte 2.
+- `nicht erbracht` zählt als 6, in Durchschnitt **und** Verteilung.
+- `nicht gewertet` fällt aus beidem heraus und steht in einer eigenen Spalte.
+  Sonst sähe eine Klassenarbeit mit vielen Entschuldigten besser aus, als sie
+  war.
+
+Der Durchschnitt einer Leistung ist ein schlichtes Mittel über die
+Teilnehmer; das Leistungsgewicht wirkt nur innerhalb der Note eines einzelnen
+Schülers, nicht zwischen Schülern.
+
+Die Übersicht ist nur lesend. Jede Spaltenüberschrift verlinkt in die
+Serieneingabe.
+
+## Änderungshistorie
+
+Jede Änderung an einer Note — Wert, Status, Löschung — wird in
+`note_historie` angehängt, in derselben Transaktion wie die Änderung selbst.
+Es gibt dafür bewusst keine Oberfläche (Spezifikation 3.2); die Tabelle
+beantwortet die Frage „was stand da vorher", wenn sie gestellt wird:
+
+```sql
+SELECT * FROM note_historie WHERE schueler_id = ? ORDER BY zeitpunkt;
+```
+
+Der Eintrag zu einer gelöschten Note überlebt die Note — deshalb trägt
+`note_id` keinen Fremdschlüssel.
+
+## Suche
+
+Das Suchfeld im Kopfbereich sucht über **alle Klassen und alle Schuljahre**,
+auch nach ehemaligen Schülern.
+
+Die Suche läuft bewusst nicht über SQL `LIKE`: SQLite ignoriert dort die
+Groß- und Kleinschreibung nur bei ASCII-Zeichen und kennt keine Umlaute.
+Stattdessen werden die Schüler geladen und in Python mit derselben
+Normalisierung gefiltert, die auch die Sortierung verwendet — „ozturk" findet
+damit „Öztürk", „strasser" findet „Straßer". Die Fotospalte ist `deferred` und
+wird dabei nicht mitgeladen.
+
+## Löschen in der Verwaltung
+
+In der Verwaltung lässt sich **nur löschen, was leer ist** — eine Notengruppe
+ohne Leistungen, ein Kurs ohne Notengruppen, eine Klasse ohne Schüler und
+Kurse, ein Schuljahr ohne Klassen, ein Schüler ohne Noten.
+
+Grund: Die Fremdschlüssel im Schema löschen kaskadierend. Ein Knopf
+„Notengruppe löschen" nähme sonst im Zweifel dreißig Noten mit, ohne dass das
+sichtbar wäre. Das endgültige Löschen mit Inhalt gehört in die Löschfunktion
+nach Abschnitt 11 und erhält dort eine Bestätigung mit Angabe der betroffenen
+Datensätze.
+
+Ein Schüler, der die Klasse verlässt, wird **nicht** gelöscht, sondern auf
+inaktiv gesetzt; seine Noten bleiben erhalten.
 
 ## Anwendung starten
 

@@ -26,7 +26,11 @@ body {
 }
 
 header {
+  align-items: baseline;
   border-bottom: 1px solid var(--linie);
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
   padding: var(--abstand);
 }
 
@@ -89,4 +93,342 @@ a {
 
 .fehler strong {
   display: block;
+}
+
+/* Verwaltung */
+
+h2 {
+  border-top: 1px solid var(--linie);
+  font-size: 1.125rem;
+  margin: 2rem 0 0.75rem;
+  padding-top: 1rem;
+}
+
+.liste {
+  list-style: none;
+  margin: 0 0 var(--abstand);
+  padding: 0;
+}
+
+.liste > li {
+  border-bottom: 1px solid var(--linie);
+  padding: 0.625rem 0;
+}
+
+.marker {
+  background: #e7eefc;
+  border-radius: 0.25rem;
+  color: var(--akzent);
+  font-size: 0.8125rem;
+  padding: 0.125rem 0.5rem;
+}
+
+form {
+  margin: 0 0 var(--abstand);
+}
+
+label {
+  display: block;
+  margin-bottom: 0.625rem;
+}
+
+label.ankreuz {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+}
+
+input:not([type="checkbox"]),
+select {
+  border: 1px solid var(--linie);
+  border-radius: 0.375rem;
+  display: block;
+  font: inherit;
+  margin-top: 0.25rem;
+  min-height: var(--tippziel);
+  padding: 0.5rem;
+  width: 100%;
+}
+
+input[type="checkbox"] {
+  height: 1.5rem;
+  width: 1.5rem;
+}
+
+button {
+  background: var(--akzent);
+  border: 0;
+  border-radius: 0.375rem;
+  color: #fff;
+  font: inherit;
+  min-height: var(--tippziel);
+  padding: 0.5rem 1rem;
+}
+
+button.gefahr {
+  background: transparent;
+  border: 1px solid var(--fehler-linie);
+  color: var(--fehler-linie);
+}
+
+.zeile {
+  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.zeile label {
+  margin-bottom: 0;
+}
+
+.bestaetigung {
+  background: #e8f5ec;
+  border-left: 4px solid #1f7a3f;
+  border-radius: 0.25rem;
+  padding: 0.75rem;
+}
+
+/* Klassen- und Schüleransicht */
+
+.kopfsuche {
+  flex: 1 1 8rem;
+  margin: 0;
+  min-width: 6rem;
+}
+
+.kopfsuche input {
+  margin-top: 0;
+  min-height: 2.25rem;
+}
+
+.umschalter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: var(--abstand);
+}
+
+.umschalter form {
+  margin: 0;
+}
+
+.schuelerkachel {
+  flex-direction: column;
+  gap: 0.5rem;
+  text-align: center;
+}
+
+.portrait {
+  border-radius: 50%;
+  display: block;
+  height: 4rem;
+  object-fit: cover;
+  width: 4rem;
+}
+
+.portrait.gross {
+  height: 6rem;
+  width: 6rem;
+}
+
+.platzhalter {
+  align-items: center;
+  background: #e7eefc;
+  color: var(--akzent);
+  display: flex;
+  font-size: 1.25rem;
+  font-weight: 600;
+  justify-content: center;
+}
+
+.kachelname {
+  overflow-wrap: anywhere;
+}
+
+.kopfzeile {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  margin-bottom: var(--abstand);
+}
+
+.kopfzeile h1 {
+  margin: 0;
+}
+
+table.noten {
+  border-collapse: collapse;
+  margin-bottom: var(--abstand);
+  width: 100%;
+}
+
+table.noten td,
+table.noten th {
+  border-bottom: 1px solid var(--linie);
+  padding: 0.5rem 0.25rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+table.noten .gruppenzeile th {
+  background: #f4f6fa;
+  font-size: 0.9375rem;
+}
+
+table.noten .ergebniszeile {
+  font-weight: 600;
+}
+
+table.noten .ergebniszeile.jahr td,
+table.noten .ergebniszeile.jahr th {
+  border-bottom: 2px solid var(--schrift);
+}
+
+table.noten .wert {
+  text-align: right;
+  white-space: nowrap;
+}
+
+table.noten .hinweis {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 400;
+}
+
+/* Serieneingabe */
+
+.zaehlerzeile {
+  font-weight: 600;
+}
+
+.eingabeliste {
+  list-style: none;
+  margin: 0 0 var(--abstand);
+  padding: 0;
+}
+
+.notenzeile {
+  border-bottom: 1px solid var(--linie);
+  padding: 0.5rem 0;
+}
+
+.notenzeile form {
+  align-items: center;
+  margin: 0;
+}
+
+.notenzeile .name {
+  flex: 1 1 8rem;
+  min-width: 6rem;
+}
+
+.notenzeile select {
+  flex: 0 0 10rem;
+  margin-top: 0;
+  width: auto;
+}
+
+.zustand {
+  color: var(--gedaempft);
+  flex: 1 1 100%;
+  font-size: 0.875rem;
+}
+
+.notenzeile.gespeichert .zustand {
+  color: #1f7a3f;
+  font-weight: 600;
+}
+
+.notenzeile.sendet .zustand {
+  color: var(--gedaempft);
+}
+
+.notenzeile.fehlgeschlagen {
+  background: var(--fehler-grund);
+  border-left: 4px solid var(--fehler-linie);
+  padding-left: 0.5rem;
+}
+
+.notenzeile.fehlgeschlagen .zustand {
+  color: var(--fehler-linie);
+  font-weight: 700;
+}
+
+/* Kursübersicht */
+
+.ansichten {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: var(--abstand);
+}
+
+.ansichten a {
+  border: 1px solid var(--linie);
+  border-radius: 0.375rem;
+  display: inline-block;
+  min-height: var(--tippziel);
+  padding: 0.625rem 0.875rem;
+  text-decoration: none;
+}
+
+.ansichten a.aktiv {
+  background: var(--akzent);
+  border-color: var(--akzent);
+  color: #fff;
+}
+
+/* Waagerecht scrollbar, Namensspalte bleibt stehen: ohne das weiß man auf
+   dem Telefon nach zwei Spalten nicht mehr, um wen es geht. */
+.matrixhuelle {
+  overflow-x: auto;
+  margin-bottom: var(--abstand);
+}
+
+table.matrix {
+  border-collapse: collapse;
+  white-space: nowrap;
+}
+
+table.matrix td,
+table.matrix th {
+  border: 1px solid var(--linie);
+  padding: 0.375rem 0.5rem;
+  text-align: left;
+}
+
+table.matrix .namensspalte {
+  background: var(--grund);
+  left: 0;
+  position: sticky;
+  text-align: left;
+  z-index: 1;
+}
+
+table.matrix .gruppenkopf {
+  background: #f4f6fa;
+  text-align: center;
+}
+
+table.matrix .leistungskopf {
+  font-size: 0.875rem;
+  font-weight: 400;
+}
+
+table.matrix .ergebnisspalte {
+  background: #f9fafc;
+}
+
+table.matrix .wert {
+  text-align: right;
+}
+
+table.matrix .hinweis {
+  display: inline;
+  font-size: 0.8125rem;
+}
+
+table.matrix.spiegel .wert {
+  text-align: center;
 }

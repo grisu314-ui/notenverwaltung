@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% set s = blatt.schueler %}
+{% block titel %}{{ s.vorname }} {{ s.nachname }} – Notenverwaltung{% endblock %}
+{% block inhalt %}
+  <div class="kopfzeile">
+    {% if s.foto_geaendert_am %}
+      <img src="/schueler/{{ s.id }}/foto" alt="" class="portrait gross">
+    {% else %}
+      <span class="portrait gross platzhalter" aria-hidden="true">{{ (s.vorname[:1] ~ s.nachname[:1]) | upper }}</span>
+    {% endif %}
+    <div>
+      <h1>{{ s.vorname | anzeigename(s.nachname, einstellungen.namensanzeige) }}</h1>
+      <p class="hinweis">
+        <a href="/klassen/{{ s.klasse_id }}">{{ s.klasse.bezeichnung }}</a> ·
+        Schuljahr {{ s.klasse.schuljahr.bezeichnung }}
+        {% if not s.ist_aktiv %}<span class="marker">inaktiv</span>{% endif %}
+      </p>
+    </div>
+  </div>
+
+  {% if not blatt.kurse %}
+    <p class="hinweis">Für diesen Schüler ist noch kein Kurs angelegt.</p>
+  {% endif %}
+
+  {% for kursblock in blatt.kurse %}
+    <h2>
+      {{ kursblock.kurs.fach }}
+      {% if not kursblock.nimmt_teil %}<span class="marker">nimmt nicht mehr teil</span>{% endif %}
+    </h2>
+
+    <table class="noten">
+      <tbody>
+        {% for hj in kursblock.halbjahre %}
+          {% for gruppe in hj.gruppen %}
+            <tr class="gruppenzeile">
+              <th colspan="2">
+                {{ hj.halbjahr.nummer }}. Halbjahr · {{ gruppe.notengruppe.bezeichnung }}
+                <span class="hinweis">Gewicht {{ gruppe.notengruppe.gewicht }}</span>
+              </th>
+            </tr>
+            {% for eintrag in gruppe.eintraege %}
+              <tr>
+                <td>
+                  {{ eintrag.leistung.bezeichnung }}
+                  <span class="hinweis">{{ eintrag.leistung.datum.strftime('%d.%m.%Y') }}</span>
+                </td>
+                <td class="wert">
+                  {% if eintrag.note is none %}
+                    <span class="hinweis">—</span>
+                  {% elif eintrag.note.status == 'gewertet' %}
+                    {{ eintrag.note.notenwert | note_anzeige }}
+                  {% elif eintrag.note.status == 'nicht_erbracht' %}
+                    <span title="nicht erbracht, geht als 6 ein">nicht erbracht</span>
+                  {% else %}
+                    <span class="hinweis" title="wird nicht gewertet">nicht gewertet</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          {% endfor %}
+          <tr class="ergebniszeile">
+            <th>{{ hj.halbjahr.nummer }}. Halbjahr</th>
+            <td class="wert">{{ hj.anzeige }}</td>
+          </tr>
+          {% if hj.festsetzung and hj.festsetzung.begruendung %}
+            <tr><td colspan="2" class="hinweis">Begründung: {{ hj.festsetzung.begruendung }}</td></tr>
+          {% endif %}
+        {% endfor %}
+        <tr class="ergebniszeile jahr">
+          <th>Jahresnote</th>
+          <td class="wert">{{ kursblock.jahresanzeige }}</td>
+        </tr>
+        {% if kursblock.jahresfestsetzung and kursblock.jahresfestsetzung.begruendung %}
+          <tr><td colspan="2" class="hinweis">Begründung: {{ kursblock.jahresfestsetzung.begruendung }}</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  {% endfor %}
+{% endblock %}

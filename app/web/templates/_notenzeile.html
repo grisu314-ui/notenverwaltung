@@ -1,0 +1,35 @@
+{# One row of the serial entry. Also the htmx answer after saving, which is
+   why it renders the stored state and never an optimistic one. #}
+{% set note = noten.get(s.id) %}
+<li class="notenzeile{% if gerade_gespeichert %} gespeichert{% endif %}"
+    id="zeile-{{ s.id }}">
+  <form method="post"
+        action="/leistungen/{{ leistung.id }}/schueler/{{ s.id }}"
+        hx-post="/leistungen/{{ leistung.id }}/schueler/{{ s.id }}"
+        hx-target="#zeile-{{ s.id }}"
+        hx-swap="outerHTML"
+        hx-trigger="change from:find select"
+        class="zeile">
+    <span class="name">{{ s.vorname | anzeigename(s.nachname, einstellungen.namensanzeige) }}</span>
+    <select name="wert" aria-label="Note für {{ s.vorname }} {{ s.nachname }}">
+      {% for schluessel, beschriftung in auswahl %}
+        <option value="{{ schluessel }}"
+          {% if note is none and schluessel == '' %}selected
+          {% elif note is not none and note.status == 'gewertet' and schluessel == note.notenwert | string %}selected
+          {% elif note is not none and note.status != 'gewertet' and schluessel == note.status %}selected
+          {% endif %}>{{ beschriftung }}</option>
+      {% endfor %}
+    </select>
+    <noscript><button type="submit">Speichern</button></noscript>
+    <span class="zustand" data-zustand="{{ 'gespeichert' if gerade_gespeichert else 'unveraendert' }}">
+      {% if gerade_gespeichert %}
+        gespeichert {{ note.geaendert_am | uhrzeit if note else '' }}
+      {% elif note %}
+        eingetragen {{ note.geaendert_am | uhrzeit }}
+      {% endif %}
+    </span>
+  </form>
+</li>
+{% if gerade_gespeichert %}
+  <span id="zaehler" hx-swap-oob="true">{{ eingetragen }} von {{ gesamt }}</span>
+{% endif %}
