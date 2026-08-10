@@ -1,0 +1,55 @@
+# Vorlage für TrueNAS SCALE (Custom App) und ebenso für einen Raspberry Pi.
+#
+# Aufbau: ein eigener Tailscale-Container, die Anwendung teilt sich dessen
+# Netz-Namespace. Die Anwendung veröffentlicht damit KEINEN eigenen Port und
+# ist außerhalb des Tailnets nicht erreichbar — das ist die Anforderung aus
+# Abschnitt 2, Punkt 6 der Spezifikation.
+#
+# Ein eigener Knoten statt des vorhandenen Tailscale-Containers hat einen
+# praktischen Vorteil: In den Tailscale-ACLs lässt sich dann genau für diesen
+# Knoten festlegen, welche Geräte ihn erreichen dürfen.
+#
+# Vor dem ersten Start anzupassen:
+#   - die beiden Pfade unter volumes auf Ihre Datasets
+#   - TS_AUTHKEY in einer .env-Datei neben dieser Datei (gehört nicht ins
+#     Repository; .gitignore deckt sie ab)
+#   - das Tailscale-Image auf die Version festnageln, die Ihr bestehender
+#     Container verwendet
+
+services:
+  tailscale:
+    image: tailscale/tailscale:latest
+    container_name: notenverwaltung-tailscale
+    hostname: notenverwaltung
+    environment:
+      # Der Schlüssel gehört Ihrer Infrastruktur, nicht der Anwendung.
+      # Die Anwendung selbst hat kein einziges Geheimnis.
+      TS_AUTHKEY: ${TS_AUTHKEY:?TS_AUTHKEY fehlt - bitte in .env eintragen}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_HOSTNAME: notenverwaltung
+    volumes:
+      - tailscale-zustand:/var/lib/tailscale
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    restart: unless-stopped
+
+  notenverwaltung:
+    build: .
+    container_name: notenverwaltung
+    # Kein ports-Eintrag und keiner möglich: der Container hängt im Netz des
+    # Sidecars. Erreichbar ist er ausschließlich über den Tailnet-Namen.
+    network_mode: service:tailscale
+    depends_on:
+      - tailscale
+    volumes:
+      # Die SQLite-Datei gehört auf ein lokales Dataset, niemals auf eine
+      # SMB- oder NFS-Freigabe (Spezifikation 2, Punkt 2).
+      - /mnt/tank/notenverwaltung/daten:/daten
+      # Getrenntes Ziel, damit es auf ein Snapshot-Dataset zeigen kann.
+      - /mnt/tank/notenverwaltung/sicherungen:/sicherungen
+    restart: unless-stopped
+
+volumes:
+  tailscale-zustand:

@@ -17,7 +17,7 @@ Maßgeblich ist `notenverwaltung-spezifikation.md`, Arbeitsvorgaben stehen in
 | Kurs-/Fachübersicht | 5.3 | umgesetzt (Schritt 5e) |
 | Fotoerfassung | 7 | umgesetzt (Schritt 5f) |
 | Export | 8 | offen |
-| Backup-Skript, Docker | 2.5 | offen |
+| Backup-Skript, Docker | 2, 2.5 | umgesetzt, Image noch nicht gebaut |
 | Löschfunktion | 11 | Kaskaden im Schema vorhanden, Bedienung offen |
 | Punkteeingabe, Notenschlüssel | 4.2, 4.3, 5.4 | **wird nicht gebaut**, siehe unten |
 
@@ -115,14 +115,127 @@ Noch nicht gebaut, hier festgehalten:
 - Zwischen zwei Notengruppen jeweils eine leere Spalte Abstand, vor den
   Jahresnoten ebenfalls.
 
-## Einrichtung
+## Betrieb im Container
+
+Aufbau: ein eigener **Tailscale-Container** als Sidecar, die Anwendung teilt
+sich dessen Netz-Namespace. Sie veröffentlicht damit keinen eigenen Port und
+ist außerhalb des Tailnets nicht erreichbar (Spezifikation 2, Punkt 6). Ein
+eigener Tailnet-Knoten hat den praktischen Vorteil, dass sich in den
+Tailscale-ACLs genau für diesen Knoten festlegen lässt, welche Geräte ihn
+erreichen dürfen.
+
+**Vor dem ersten Start anzupassen** in `docker-compose.yml`:
+
+1. Die beiden Pfade unter `volumes` auf Ihre Datasets. Die SQLite-Datei gehört
+   auf ein **lokales** Dataset, nie auf eine SMB- oder NFS-Freigabe.
+2. Eine Datei `.env` neben der Compose-Datei mit `TS_AUTHKEY=tskey-...`.
+   Sie ist in `.gitignore` eingetragen. Der Schlüssel gehört dem
+   Tailscale-Container, nicht der Anwendung — die hat kein einziges Geheimnis
+   und liest genau eine Umgebungsvariable, den Datenbankpfad.
+3. Das Tailscale-Image auf die Version festnageln, die Ihr bestehender
+   Container verwendet.
+
+```bash
+docker compose build
+docker compose up -d
+```
+
+**Die Datenbank beim ersten Mal anlegen** (der Container startet ohne sie
+nicht):
+
+```bash
+docker compose run --rm --entrypoint "" notenverwaltung alembic upgrade head
+```
+
+### Rechte auf dem Dataset
+
+Die Anwendung läuft als UID/GID 1000, nicht als root. Gehört das
+Datenverzeichnis einem anderen Benutzer, startet der Container zwar, kann aber
+nicht schreiben. Das Fehlerbild ist `unable to open database file`. Abhilfe:
+
+```bash
+chown -R 1000:1000 /mnt/tank/notenverwaltung/daten /mnt/tank/notenverwaltung/sicherungen
+```
+
+### Aktualisieren
+
+**Der Container migriert die Datenbank nicht von selbst.** Ändert eine neue
+Version das Schema, prüft er das beim Start, startet **nicht** und schreibt
+den Grund ins Protokoll. Das ist beabsichtigt: eine automatische Migration
+würde den produktiven Bestand mit Klarnamen und Lichtbildern umbauen, ohne
+dass jemand sie auf einer Kopie durchgespielt hat.
+
+Ablauf beim Update — erst sichern, dann migrieren:
+
+```bash
+docker compose pull ; docker compose build
+docker compose run --rm --entrypoint "" notenverwaltung \
+    python scripts/backup.py /sicherungen
+docker compose run --rm --entrypoint "" notenverwaltung alembic upgrade head
+docker compose up -d
+```
+
+Bei einer Migration, die mehr als eine Spalte hinzufügt, gehört zusätzlich ein
+Probelauf auf einer Kopie dazu: die frische Sicherung an einen anderen Ort
+kopieren, `NOTENVERWALTUNG_DB` darauf zeigen lassen, migrieren, ansehen.
+
+## Sicherung und Wiederherstellung
+
+```bash
+docker compose exec notenverwaltung python scripts/backup.py /sicherungen --aufbewahren 14
+```
+
+Das Skript verwendet **`VACUUM INTO`**, nie eine Dateikopie. Der Grund ist
+nicht theoretisch: Ein `cp` der `.db`-Datei einer laufenden Anwendung im
+WAL-Modus liefert einen inkonsistenten Stand — im Test in
+`tests/test_backup.py` fehlt in der so entstandenen Kopie eine Tabelle, die
+Sekunden vorher geschrieben wurde, vollständig.
+
+Weitere Eigenschaften:
+
+- Die Quelle wird **nur lesend** geöffnet. Ein vertippter Pfad schlägt fehl,
+  statt still eine leere Datenbank anzulegen.
+- Nach dem Schreiben wird die Kopie geöffnet und mit `integrity_check` und
+  `foreign_key_check` geprüft. Eine Sicherung, die niemand liest, ist keine.
+- Die letzten 14 Stände bleiben, ältere werden entfernt. Fremde Dateien im
+  Verzeichnis bleiben unangetastet.
+- Rückgabewert ≠ 0 bei Fehlschlag, damit Cron es meldet.
+
+Per Cron auf dem TrueNAS-Host, zum Beispiel nächtlich um 2 Uhr:
+
+```
+0 2 * * * docker compose -f /pfad/zu/docker-compose.yml exec -T notenverwaltung python scripts/backup.py /sicherungen --aufbewahren 14
+```
+
+### Wiederherstellen
+
+```bash
+docker compose down
+cp /mnt/tank/notenverwaltung/sicherungen/notenverwaltung-JJJJ-MM-TT-HHMMSS.db \
+   /mnt/tank/notenverwaltung/daten/notenverwaltung.db
+chown 1000:1000 /mnt/tank/notenverwaltung/daten/notenverwaltung.db
+docker compose up -d
+```
+
+Das `cp` ist hier zulässig und richtig: Die Sicherung ist eine ruhende Datei,
+und die Anwendung ist gestoppt. Verboten ist `cp` nur auf die **laufende**
+Datenbank.
+
+> **Abnahme:** Abschnitt 2.5 der Spezifikation verlangt einen einmal von Hand
+> durchgespielten Wiederherstellungstest. Der automatische Test in
+> `tests/test_backup.py` deckt Sichern und Zurücklesen ab, aber nicht Ihre
+> echten Pfade und Rechte. Spielen Sie den Ablauf oben einmal mit einer
+> echten Sicherung durch, bevor Sie sich darauf verlassen.
+
+## Einrichtung ohne Container (Entwicklung)
 
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements-dev.txt
 ```
 
-Python 3.11 oder neuer (die Anwendung verwendet `enum.StrEnum`).
+Python 3.11 oder neuer (die Anwendung verwendet `enum.StrEnum`). Der Container
+verwendet 3.11, weil die Anwendung genau dagegen getestet ist.
 
 ## Datenbank
 
