@@ -167,10 +167,22 @@ erreichbar ist. **Die Anwendung hat keine eigene Authentifizierung**, liest
 keinen Identitäts-Header und kennt keine Sitzungen — der Zugang wird
 vollständig davor geregelt. Das ist beabsichtigt und keine Lücke.
 
-Für die Fotoerfassung (Abschnitt 7) ist später ein **gültiges Zertifikat auf
-einem echten Hostnamen** nötig: Der Kamerazugriff funktioniert nur im Secure
-Context, ein Selbstzertifikat oder der Zugriff über eine IP-Adresse reicht
-nicht.
+### Kein TLS — bewusste Abweichung von Abschnitt 2, Punkt 7
+
+Die Spezifikation verlangt HTTPS mit gültigem Zertifikat. Das entfällt auf
+Entscheidung des Betreibers: Der Zugriff läuft ausschließlich durch den
+Tailscale-Tunnel, der Verkehr ist damit ohnehin verschlüsselt.
+
+**Offener technischer Punkt für Abschnitt 7.** Browser beurteilen einen
+„Secure Context" am URL-Schema, nicht an der tatsächlichen Transportsicherheit;
+`http://…` im Tailnet gilt ihnen als unsicher. Sicher ist: `getUserMedia`
+verlangt einen Secure Context. Ob das auch für
+`<input type="file" capture="environment">` gilt — den in Abschnitt 7
+beschriebenen Weg —, ist nicht geklärt und wird beim Bau der Fotoerfassung am
+Zielgerät ausprobiert. Falls `capture` ignoriert wird, gibt es zwei Auswege
+ohne eigene Domain: ein Datei-Feld ohne `capture` (Kamera wird im
+Auswahldialog gewählt) oder ein Zertifikat über `tailscale cert` für den
+`*.ts.net`-Namen.
 
 ## Mitgelieferte Fremddateien
 
