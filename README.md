@@ -143,8 +143,8 @@ Schema anlegen oder aktualisieren:
 NOTENVERWALTUNG_DB=data/dev.db .venv/bin/alembic upgrade head
 ```
 
-Entwicklungsdaten einspielen (erfundene Namen, keine Fotos, bricht bei einer
-nicht leeren Datenbank ab):
+Entwicklungsdaten einspielen (erfundene Namen, erzeugte Platzhalterbilder,
+bricht bei einer nicht leeren Datenbank ab):
 
 ```bash
 NOTENVERWALTUNG_DB=data/dev.db .venv/bin/python scripts/seed_dev.py
