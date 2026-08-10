@@ -16,7 +16,7 @@ Maßgeblich ist `notenverwaltung-spezifikation.md`, Arbeitsvorgaben stehen in
 | Serieneingabe von Noten, Änderungshistorie | 5.4, 3.2 | umgesetzt (Schritt 5d) |
 | Kurs-/Fachübersicht | 5.3 | umgesetzt (Schritt 5e) |
 | Fotoerfassung | 7 | umgesetzt (Schritt 5f) |
-| Export | 8 | offen |
+| Export | 8, 11 | umgesetzt |
 | Backup-Skript, Docker | 2, 2.5 | umgesetzt, Image noch nicht gebaut |
 | Löschfunktion | 11 | Kaskaden im Schema vorhanden, Bedienung offen |
 | Punkteeingabe, Notenschlüssel | 4.2, 4.3, 5.4 | **wird nicht gebaut**, siehe unten |
@@ -104,16 +104,36 @@ Entscheidungen des Auftraggebers. Umgesetzt in `app/grading/`.
 - **Noten aus Halbjahr 1 bleiben in Halbjahr 2 sichtbar** (O-5). Betrifft die
   Ansichten, Abschnitt 5.
 
-## Layout des Tabellenexports (Abschnitt 8, O-6)
+## Export (Abschnitt 8, O-6)
 
-Noch nicht gebaut, hier festgehalten:
+Über `/verwaltung` zwei Downloads, beide über **den gesamten Datenbestand** —
+alle Schuljahre, alle Klassen, alle Kurse. Das erfüllt zugleich die Forderung
+aus Abschnitt 11, dass der Bestand exportierbar sein muss, damit kein Lock-in
+entsteht.
 
-- Kopfbereich mit Klasse und Kurs.
-- Pro Zeile ein Schüler.
-- Oberhalb der ersten Schülerzeile mehrere Beschriftungszeilen, die Notenart
-  und Notengruppe kennzeichnen. Der Text dieser Zellen wird um 90° gedreht.
-- Zwischen zwei Notengruppen jeweils eine leere Spalte Abstand, vor den
-  Jahresnoten ebenfalls.
+- **XLSX**, ein Blatt je Kurs, im Layout aus O-6: Kopfbereich mit Klasse und
+  Kurs, je Zeile ein Schüler, darüber drei um 90° gedrehte Beschriftungszeilen
+  für Halbjahr, Notengruppe mit Gewicht und Leistung mit Datum. Zwischen zwei
+  Notengruppen und vor den Jahresnoten je eine leere Spalte. Die Namensspalte
+  und die Beschriftungen bleiben beim Scrollen stehen.
+- **Markdown**, ein Abschnitt je Kurs.
+
+Beide Formate werden aus demselben Modell erzeugt wie die Kursübersicht am
+Bildschirm. Zwei getrennte Rechenwege für dieselben Noten laufen früher oder
+später auseinander, und es fällt erst auf, wenn jemand die Zahlen vergleicht.
+
+**Bewusste Abweichung von Abschnitt 8: keine Gruppenmittel** — dieselbe
+Begründung wie bei der Kursübersicht.
+
+Eine Notengruppe ohne Leistungen bekommt keine Spalte; sie wäre eine
+Überschrift über nichts und würde die Abstandsspalte zur nächsten Gruppe
+auffressen. In der Gruppenliste über der Tabelle steht sie mit dem Zusatz
+„ohne Leistungen".
+
+Der Export entsteht **im Arbeitsspeicher** und wird direkt ausgeliefert: keine
+temporäre Datei, kein Zeitplan, kein Ablageort. Der Dateiname wird in der
+Anwendung gebildet und enthält keine gespeicherten Daten — kein Name aus einem
+Excel-Import kann den Header aufbrechen. **Der Export enthält Klarnamen.**
 
 ## Betrieb im Container
 
