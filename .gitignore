@@ -9,3 +9,6 @@ data/
 *.db-shm
 
 .pytest_cache/
+
+# Auth-Key für den Tailscale-Sidecar, gehört nicht ins Repository.
+.env
