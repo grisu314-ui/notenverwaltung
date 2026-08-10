@@ -9,8 +9,13 @@ Maßgeblich ist `notenverwaltung-spezifikation.md`, Arbeitsvorgaben stehen in
 | Bereich | Spezifikation | Stand |
 |---|---|---|
 | Projektstruktur, Datenmodell | 3 | umgesetzt |
-| Notenlogik | 4 | offen |
-| Ansichten | 5, 6, 7 | offen |
+| Notenlogik | 4 | umgesetzt in `app/grading/` |
+| Web-Fundament, Sortierung, Einstellungen | 5, 6, 10 | umgesetzt (Schritt 5a) |
+| Verwaltungsoberfläche | 5.5 | offen |
+| Klassen- und Schüleransicht, Suche | 5.1, 5.2 | offen |
+| Serieneingabe von Noten | 5.4 | offen |
+| Kurs-/Fachübersicht | 5.3 | offen |
+| Fotoerfassung | 7 | offen |
 | Export | 8 | offen |
 | Backup-Skript, Docker | 2.5 | offen |
 | Löschfunktion | 11 | Kaskaden im Schema vorhanden, Bedienung offen |
@@ -40,9 +45,43 @@ und den Nachbau der genannten Abschnitte.
 
 ## Festlegungen zur Notenlogik (Abschnitt 4)
 
-Entscheidungen des Auftraggebers, die die Spezifikation offen lässt. Sie sind
-noch **nicht umgesetzt** — Abschnitt 4 ist nicht gebaut — und stehen hier,
-damit sie beim Bau nicht neu erraten werden.
+Entscheidungen des Auftraggebers. Umgesetzt in `app/grading/`.
+
+### Abweichungen von Abschnitt 4.4
+
+- **Die Berechnung ist einstufig, nicht zweistufig.** Die Spezifikation
+  beschreibt erst ein Mittel je Notengruppe und dann ein Mittel dieser
+  Gruppenmittel; damit hinge die Wirkung einer Gruppe nicht davon ab, wie
+  viele Noten sie enthält. Gewünscht ist das Gegenteil — viele kleine Noten
+  dürfen stärker wiegen. Gerechnet wird deshalb:
+
+  ```
+  Halbjahresnote = Σ(notenwert × gruppengewicht × leistungsgewicht)
+                   ─────────────────────────────────────────────────
+                   Σ(gruppengewicht × leistungsgewicht)
+  ```
+
+  Gruppengewichte behalten ihre Wirkung: Eine Note in einer mit 70
+  gewichteten Gruppe zählt mehr als eine in einer mit 30 gewichteten. Neu ist
+  nur, dass eine Gruppe mit vier Noten bei gleichem Gruppengewicht eine
+  Gruppe mit einer Note überwiegt. Diese Rechnung trifft den in Testfall T-1
+  genannten Erwartungswert 2,00 exakt, was die zweistufige Regel nicht tut.
+
+- **Eine Nachkommastelle statt zwei.** 4.4 nennt zwei (z. B. 2,43).
+
+- **Gleichstand geht immer zur besseren Note**, nicht kaufmännisch. 4.4 nennt
+  ausdrücklich 2,49 → 2 und 2,50 → 3; hier wird **2,50 zur 2**.
+
+  Beachten: Die ganze Notenstufe wird aus dem auf eine Stelle gerundeten Wert
+  gebildet, damit angezeigte Zahl und Note nie widersprüchlich sind. Durch
+  diese zweifache Rundung liegt die tatsächliche Grenze zur nächsten Note
+  nicht bei einem Rohwert von 2,50, sondern erst oberhalb von 2,55: 2,54 wird
+  zu 2,5 und damit zur 2, erst 2,56 wird zu 2,6 und damit zur 3.
+
+- **Keine Rückrechnung eines Durchschnitts auf eine Tendenznote.** Die Tabelle
+  aus 4.1 dient nur der Eingabe und Anzeige einzelner Noten.
+
+### Weitere Festlegungen
 
 - **Gewichtung der Halbjahre für die Jahresnote: 50/50**, pro Kurs änderbar
   (`kurs.gewicht_halbjahr_1` / `_2`, Vorgabe in `app/db/models.py`).
@@ -59,6 +98,22 @@ damit sie beim Bau nicht neu erraten werden.
   eine Tendenz. Grund: § 53 SchulO laut Abschnitt 4.5; die Überschreibung ist
   der Weg zur Zeugnisnote. Prüfung gehört in die Service-Schicht, das Schema
   erzwingt es nicht.
+- **Leere Notengruppe: kein Gewicht** (O-2). Sie fällt aus der Berechnung;
+  bei der einstufigen Rechnung geschieht das von selbst, weil sie weder in
+  Zähler noch Nenner auftaucht.
+- **Noten aus Halbjahr 1 bleiben in Halbjahr 2 sichtbar** (O-5). Betrifft die
+  Ansichten, Abschnitt 5.
+
+## Layout des Tabellenexports (Abschnitt 8, O-6)
+
+Noch nicht gebaut, hier festgehalten:
+
+- Kopfbereich mit Klasse und Kurs.
+- Pro Zeile ein Schüler.
+- Oberhalb der ersten Schülerzeile mehrere Beschriftungszeilen, die Notenart
+  und Notengruppe kennzeichnen. Der Text dieser Zellen wird um 90° gedreht.
+- Zwischen zwei Notengruppen jeweils eine leere Spalte Abstand, vor den
+  Jahresnoten ebenfalls.
 
 ## Einrichtung
 
@@ -100,6 +155,47 @@ Entwicklungsdatenbank.** Die produktive Datei enthält Klarnamen und Lichtbilder
 und wird im Entwicklungsprozess nicht angefasst. Eine Migration wird vor dem
 produktiven Lauf auf einer Kopie des produktiven Bestands durchgespielt — die
 Kopie über `VACUUM INTO` erzeugen, nie über `cp` auf die laufende Datei.
+
+## Anwendung starten
+
+```bash
+NOTENVERWALTUNG_DB=data/dev.db .venv/bin/uvicorn app.web.app:app --reload
+```
+
+Im Betrieb läuft die Anwendung in einem Container, der über Tailscale
+erreichbar ist. **Die Anwendung hat keine eigene Authentifizierung**, liest
+keinen Identitäts-Header und kennt keine Sitzungen — der Zugang wird
+vollständig davor geregelt. Das ist beabsichtigt und keine Lücke.
+
+### Kein TLS — bewusste Abweichung von Abschnitt 2, Punkt 7
+
+Die Spezifikation verlangt HTTPS mit gültigem Zertifikat. Das entfällt auf
+Entscheidung des Betreibers: Der Zugriff läuft ausschließlich durch den
+Tailscale-Tunnel, der Verkehr ist damit ohnehin verschlüsselt.
+
+**Offener technischer Punkt für Abschnitt 7.** Browser beurteilen einen
+„Secure Context" am URL-Schema, nicht an der tatsächlichen Transportsicherheit;
+`http://…` im Tailnet gilt ihnen als unsicher. Sicher ist: `getUserMedia`
+verlangt einen Secure Context. Ob das auch für
+`<input type="file" capture="environment">` gilt — den in Abschnitt 7
+beschriebenen Weg —, ist nicht geklärt und wird beim Bau der Fotoerfassung am
+Zielgerät ausprobiert. Falls `capture` ignoriert wird, gibt es zwei Auswege
+ohne eigene Domain: ein Datei-Feld ohne `capture` (Kamera wird im
+Auswahldialog gewählt) oder ein Zertifikat über `tailscale cert` für den
+`*.ts.net`-Namen.
+
+## Mitgelieferte Fremddateien
+
+`app/web/static/htmx.min.js` — htmx 2.0.10, Lizenz 0BSD. Kein CDN, kein npm im
+Build. Aktualisierung von Hand:
+
+```bash
+curl -sS -o /tmp/htmx.tgz https://registry.npmjs.org/htmx.org/-/htmx.org-<version>.tgz
+tar -xzf /tmp/htmx.tgz -C /tmp package/dist/htmx.min.js
+cp /tmp/package/dist/htmx.min.js app/web/static/htmx.min.js
+```
+
+Danach die Version hier im README anpassen.
 
 ## Tests
 
@@ -155,9 +251,10 @@ Bei einem Fehlschlag die alten Pins wiederherstellen. Die Anwendung baut keine
 ausgehenden Verbindungen auf; Aktualisierungen sind der einzige Netzzugriff und
 finden nur beim Entwickeln statt.
 
-## Offene Punkte mit Bezug zum Datenmodell
+## Offene Punkte aus Abschnitt 9 der Spezifikation
 
-Beide sind geklärt:
+**Alle acht sind geklärt.** O-2, O-3, O-5 und O-6 stehen weiter oben bei den
+fachlichen Festlegungen; hier die verbleibenden vier:
 
 - **O-1** — entfällt. Es gibt keine Prozentgrenzen, weil es keine Punkteeingabe
   gibt (siehe oben).
@@ -177,7 +274,5 @@ Ebenfalls erledigt: **O-4** entfällt mit der Punkteeingabe („Mitarbeit als
 Punktesystem" ist genau das), **O-8** ist verneint — Kurse bleiben
 klassengebunden, `kurs.klasse_id` ist NOT NULL.
 
-Weiterhin offen und vor der Notenlogik zu klären: **O-2** (Behandlung leerer
-Notengruppen bei der Gewichtung), **O-3** (Rundungsregel und Schwelle für die
-Zeugnisnote), **O-5** (Sichtbarkeit der Noten aus Halbjahr 1 in Halbjahr 2).
-**O-6** (Layout des Tabellenexports) wird erst für Abschnitt 8 gebraucht.
+Die mit **(L)** markierten Punkte wurden nicht anhand der Lehrmeister-App
+beantwortet, sondern vom Auftraggeber direkt entschieden.

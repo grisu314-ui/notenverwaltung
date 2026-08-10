@@ -1,0 +1,92 @@
+/* Handwritten, no framework, no build step, no external font.
+   The benchmark is a phone held one-handed in a classroom, so tap targets are
+   large and nothing depends on hovering. */
+
+:root {
+  --grund: #ffffff;
+  --schrift: #16181d;
+  --gedaempft: #5b6472;
+  --linie: #d7dbe2;
+  --akzent: #1f4f8b;
+  --fehler-grund: #fdeceb;
+  --fehler-linie: #b3261e;
+  --abstand: 1rem;
+  --tippziel: 2.75rem;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--grund);
+  color: var(--schrift);
+  font: 1rem/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+header {
+  border-bottom: 1px solid var(--linie);
+  padding: var(--abstand);
+}
+
+.marke {
+  color: var(--schrift);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+main {
+  margin: 0 auto;
+  max-width: 60rem;
+  padding: var(--abstand);
+}
+
+h1 {
+  font-size: 1.375rem;
+  margin: 0 0 var(--abstand);
+}
+
+a {
+  color: var(--akzent);
+}
+
+.hinweis {
+  color: var(--gedaempft);
+}
+
+.kachelliste {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.kachel {
+  align-items: center;
+  border: 1px solid var(--linie);
+  border-radius: 0.5rem;
+  display: flex;
+  justify-content: center;
+  min-height: var(--tippziel);
+  padding: 0.75rem;
+  text-decoration: none;
+}
+
+.kachel:active {
+  background: #eef2f8;
+}
+
+.fehler {
+  background: var(--fehler-grund);
+  border-left: 4px solid var(--fehler-linie);
+  border-radius: 0.25rem;
+  display: block;
+  padding: 0.75rem;
+}
+
+.fehler strong {
+  display: block;
+}

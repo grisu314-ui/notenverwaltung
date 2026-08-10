@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block inhalt %}
+  {% if schuljahr %}
+    <h1>Schuljahr {{ schuljahr.bezeichnung }}</h1>
+    {% if klassen %}
+      <ul class="kachelliste">
+        {% for klasse in klassen %}
+          <li><a class="kachel" href="/klassen/{{ klasse.id }}">{{ klasse.bezeichnung }}</a></li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="hinweis">Für dieses Schuljahr ist noch keine Klasse angelegt.</p>
+    {% endif %}
+  {% else %}
+    <h1>Kein aktives Schuljahr</h1>
+    <p class="hinweis">
+      Es ist kein Schuljahr als aktiv gekennzeichnet. Legen Sie eines an oder
+      markieren Sie ein vorhandenes als aktiv.
+    </p>
+  {% endif %}
+{% endblock %}

@@ -23,7 +23,10 @@ from app.db.session import create_app_engine
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers defaults to True and would switch off every
+    # logger created before this point -- including the application's own.
+    # A migration must not leave the application unable to log.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 
