@@ -9,7 +9,12 @@ from app.services import suche as suchdienst
 from app.services.schuelerblatt import blatt
 from app.services.settings import lies_einstellungen
 from app.web.dependencies import datenbanksitzung
-from app.web.gemeinsam import hole, sortierte_schueler, templates
+from app.web.gemeinsam import (
+    hole,
+    sortiert_nach_bezeichnung,
+    sortierte_schueler,
+    templates,
+)
 
 router = APIRouter(tags=["ansicht"])
 
@@ -34,6 +39,7 @@ def klassenansicht(
         name="klasse.html",
         context={
             "klasse": klasse,
+            "kurse": sortiert_nach_bezeichnung(klasse.kurse, "fach"),
             "schueler": sortierte_schueler(aktive, einstellungen.sortierung),
             "einstellungen": einstellungen,
             "ziel": f"/klassen/{klasse_id}",

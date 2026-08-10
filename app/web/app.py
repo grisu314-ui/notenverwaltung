@@ -26,6 +26,7 @@ from app.web.routers import (
     ansicht,
     einstellungen,
     klassen,
+    noten,
     kurse,
     notengruppen,
     schueler,
@@ -41,6 +42,7 @@ app.mount("/static", StaticFiles(directory=VERZEICHNIS / "static"), name="static
 for modul in (
     ansicht,
     einstellungen,
+    noten,
     schuljahre,
     klassen,
     schueler,

@@ -1,6 +1,8 @@
 """Shared pieces of the web layer: templates, confirmations, small helpers."""
 
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
 from fastapi.templating import Jinja2Templates
@@ -15,6 +17,17 @@ templates = Jinja2Templates(directory=VERZEICHNIS / "templates")
 templates.env.filters["anzeigename"] = anzeigename
 # 0.7 is shown as "1+", never as "0,7" (specification 4.1).
 templates.env.filters["note_anzeige"] = als_anzeige
+templates.env.filters["uhrzeit"] = lambda wert: uhrzeit(wert)
+
+ANZEIGEZONE = ZoneInfo("Europe/Berlin")
+
+
+def uhrzeit(wert: datetime | None) -> str:
+    """Stored timestamps are naive UTC; the user sees local time."""
+    if wert is None:
+        return ""
+    return wert.replace(tzinfo=ZoneInfo("UTC")).astimezone(ANZEIGEZONE).strftime("%H:%M")
+
 
 # Confirmations travel as a key in the URL, never as free text: without
 # sessions there is no flash message, and echoing text from a query string

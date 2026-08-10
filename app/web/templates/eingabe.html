@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block titel %}{{ leistung.bezeichnung }} – Notenverwaltung{% endblock %}
+{% block inhalt %}
+  <p><a href="/kurse/{{ kurs.id }}/leistungen">← {{ kurs.fach }}, {{ kurs.klasse.bezeichnung }}</a></p>
+  <h1>{{ leistung.bezeichnung }}</h1>
+  <p class="hinweis">
+    {{ leistung.notengruppe.halbjahr.nummer }}. Halbjahr ·
+    {{ leistung.notengruppe.bezeichnung }} ·
+    {{ leistung.datum.strftime('%d.%m.%Y') }} ·
+    Gewicht {{ leistung.gewicht }}
+  </p>
+
+  <p class="zaehlerzeile">Eingetragen: <span id="zaehler">{{ eingetragen }} von {{ gesamt }}</span></p>
+
+  {% if schueler %}
+    <ul class="eingabeliste">
+      {% for s in schueler %}{% include "_notenzeile.html" %}{% endfor %}
+    </ul>
+  {% else %}
+    <p class="hinweis">Dieser Kurs hat keine aktiven Teilnehmer.</p>
+  {% endif %}
+
+  <h2>Leistung bearbeiten</h2>
+  <form method="post" action="/leistungen/{{ leistung.id }}">
+    <label>Bezeichnung <input name="bezeichnung" value="{{ leistung.bezeichnung }}" required></label>
+    <label>Datum <input type="date" name="datum" value="{{ leistung.datum }}" required></label>
+    <label>Gewicht <input name="gewicht" value="{{ leistung.gewicht }}" required inputmode="decimal"></label>
+    <button type="submit">Speichern</button>
+  </form>
+  <form method="post" action="/leistungen/{{ leistung.id }}/loeschen">
+    <button type="submit" class="gefahr">Leistung löschen</button>
+  </form>
+
+  <script src="/static/eingabe.js" defer></script>
+{% endblock %}

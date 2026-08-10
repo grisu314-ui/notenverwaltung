@@ -295,3 +295,62 @@ table.noten .hinweis {
   font-size: 0.875rem;
   font-weight: 400;
 }
+
+/* Serieneingabe */
+
+.zaehlerzeile {
+  font-weight: 600;
+}
+
+.eingabeliste {
+  list-style: none;
+  margin: 0 0 var(--abstand);
+  padding: 0;
+}
+
+.notenzeile {
+  border-bottom: 1px solid var(--linie);
+  padding: 0.5rem 0;
+}
+
+.notenzeile form {
+  align-items: center;
+  margin: 0;
+}
+
+.notenzeile .name {
+  flex: 1 1 8rem;
+  min-width: 6rem;
+}
+
+.notenzeile select {
+  flex: 0 0 10rem;
+  margin-top: 0;
+  width: auto;
+}
+
+.zustand {
+  color: var(--gedaempft);
+  flex: 1 1 100%;
+  font-size: 0.875rem;
+}
+
+.notenzeile.gespeichert .zustand {
+  color: #1f7a3f;
+  font-weight: 600;
+}
+
+.notenzeile.sendet .zustand {
+  color: var(--gedaempft);
+}
+
+.notenzeile.fehlgeschlagen {
+  background: var(--fehler-grund);
+  border-left: 4px solid var(--fehler-linie);
+  padding-left: 0.5rem;
+}
+
+.notenzeile.fehlgeschlagen .zustand {
+  color: var(--fehler-linie);
+  font-weight: 700;
+}

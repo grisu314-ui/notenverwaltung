@@ -7,6 +7,15 @@
     <a href="/verwaltung/klassen/{{ klasse.id }}">verwalten</a>
   </p>
 
+  {% if kurse %}
+    <ul class="liste">
+      {% for kurs in kurse %}
+        <li><a href="/kurse/{{ kurs.id }}/leistungen">{{ kurs.fach }}</a>
+          <span class="hinweis">Noten eintragen</span></li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
   {% include "_umschalter.html" %}
 
   {% if schueler %}
