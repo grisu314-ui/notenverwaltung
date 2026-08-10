@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% set kurs = blatt.kurs %}
+{% block titel %}{{ kurs.fach }} – Übersicht{% endblock %}
+{% block inhalt %}
+  <p><a href="/klassen/{{ kurs.klasse_id }}">← {{ kurs.klasse.bezeichnung }}</a></p>
+  <h1>{{ kurs.fach }} – {{ kurs.klasse.bezeichnung }}</h1>
+
+  <nav class="ansichten">
+    {% for schluessel, beschriftung in ansichten %}
+      <a href="/kurse/{{ kurs.id }}?ansicht={{ schluessel }}"
+         class="{% if blatt.ansicht == schluessel %}aktiv{% endif %}">{{ beschriftung }}</a>
+    {% endfor %}
+    <a href="/kurse/{{ kurs.id }}/leistungen">Noten eintragen</a>
+  </nav>
+
+  {% if not blatt.zeilen %}
+    <p class="hinweis">Dieser Kurs hat keine aktiven Teilnehmer.</p>
+  {% elif not blatt.gruppen %}
+    <p class="hinweis">
+      Für diese Ansicht gibt es noch keine Notengruppe.
+      <a href="/verwaltung/kurse/{{ kurs.id }}">Notengruppe anlegen</a>
+    </p>
+  {% else %}
+    <div class="matrixhuelle">
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th class="namensspalte" rowspan="2">Schüler</th>
+            {% for gruppe in blatt.gruppen %}
+              <th colspan="{{ gruppe.leistungen | length or 1 }}" class="gruppenkopf">
+                {{ gruppe.halbjahr.nummer }}. HJ · {{ gruppe.notengruppe.bezeichnung }}
+                <span class="hinweis">Gewicht {{ gruppe.notengruppe.gewicht }}</span>
+              </th>
+            {% endfor %}
+            {% for halbjahr in blatt.halbjahre %}
+              <th rowspan="2" class="ergebnisspalte">{{ halbjahr.nummer }}. Halbjahr</th>
+            {% endfor %}
+            {% if blatt.ansicht == 'jahr' %}
+              <th rowspan="2" class="ergebnisspalte">Jahr</th>
+            {% endif %}
+          </tr>
+          <tr>
+            {% for gruppe in blatt.gruppen %}
+              {% if gruppe.leistungen %}
+                {% for leistung in gruppe.leistungen %}
+                  <th class="leistungskopf">
+                    <a href="/leistungen/{{ leistung.id }}">{{ leistung.bezeichnung }}</a>
+                    <span class="hinweis">{{ leistung.datum.strftime('%d.%m.') }}</span>
+                  </th>
+                {% endfor %}
+              {% else %}
+                <th class="hinweis">keine Leistung</th>
+              {% endif %}
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for zeile in blatt.zeilen %}
+            <tr>
+              <th class="namensspalte">
+                <a href="/schueler/{{ zeile.schueler.id }}">{{ zeile.schueler.vorname | anzeigename(zeile.schueler.nachname, einstellungen.namensanzeige) }}</a>
+              </th>
+              {% for gruppe in blatt.gruppen %}
+                {% if gruppe.leistungen %}
+                  {% for leistung in gruppe.leistungen %}
+                    {% set note = zeile.noten.get(leistung.id) %}
+                    <td class="wert">
+                      {% if note is none %}<span class="hinweis">—</span>
+                      {% elif note.status == 'gewertet' %}{{ note.notenwert | note_anzeige }}
+                      {% elif note.status == 'nicht_erbracht' %}<abbr title="nicht erbracht, zählt als 6">n.e.</abbr>
+                      {% else %}<abbr title="nicht gewertet" class="hinweis">n.g.</abbr>
+                      {% endif %}
+                    </td>
+                  {% endfor %}
+                {% else %}
+                  <td class="hinweis">—</td>
+                {% endif %}
+              {% endfor %}
+              {% for halbjahr in blatt.halbjahre %}
+                {% set ergebnis = zeile.ergebnis_halbjahr.get(halbjahr.nummer) %}
+                {% set gesetzt = zeile.festsetzung_halbjahr.get(halbjahr.nummer) %}
+                <td class="wert ergebnisspalte">
+                  {% if gesetzt %}<strong>{{ gesetzt.notenwert | note_anzeige }}</strong>
+                    {% if ergebnis %}<span class="hinweis">({{ ergebnis.wert | dezimal }})</span>{% endif %}
+                  {% elif ergebnis %}<strong>{{ ergebnis.ganze_note }}</strong>
+                    <span class="hinweis">({{ ergebnis.wert | dezimal }})</span>
+                  {% else %}<span class="hinweis">—</span>{% endif %}
+                </td>
+              {% endfor %}
+              {% if blatt.ansicht == 'jahr' %}
+                <td class="wert ergebnisspalte">
+                  {% if zeile.jahresfestsetzung %}<strong>{{ zeile.jahresfestsetzung.notenwert | note_anzeige }}</strong>
+                    {% if zeile.jahresergebnis %}<span class="hinweis">({{ zeile.jahresergebnis.wert | dezimal }})</span>{% endif %}
+                  {% elif zeile.jahresergebnis %}<strong>{{ zeile.jahresergebnis.ganze_note }}</strong>
+                    <span class="hinweis">({{ zeile.jahresergebnis.wert | dezimal }})</span>
+                  {% else %}<span class="hinweis">—</span>{% endif %}
+                </td>
+              {% endif %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <h2>Notenspiegel je Leistung</h2>
+    <div class="matrixhuelle">
+      <table class="matrix spiegel">
+        <thead>
+          <tr>
+            <th class="namensspalte">Leistung</th>
+            <th>Ø</th>
+            {% for stufe in [1, 2, 3, 4, 5, 6] %}<th>{{ stufe }}</th>{% endfor %}
+            <th><abbr title="nicht gewertet">n.g.</abbr></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for eintrag in blatt.spiegel %}
+            <tr>
+              <th class="namensspalte">
+                <a href="/leistungen/{{ eintrag.leistung.id }}">{{ eintrag.leistung.bezeichnung }}</a>
+              </th>
+              <td class="wert">{% if eintrag.durchschnitt is not none %}{{ eintrag.durchschnitt | dezimal }}{% else %}<span class="hinweis">—</span>{% endif %}</td>
+              {% for stufe in [1, 2, 3, 4, 5, 6] %}
+                <td class="wert">{{ eintrag.verteilung[stufe] or '' }}</td>
+              {% endfor %}
+              <td class="wert hinweis">{{ eintrag.nicht_gewertet or '' }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="hinweis">
+      „n.e." zählt als 6 in Durchschnitt und Verteilung, „n.g." bleibt aus beidem heraus.
+      Tendenzen zählen zu ihrer ganzen Note.
+    </p>
+  {% endif %}
+{% endblock %}

@@ -14,7 +14,7 @@ Maßgeblich ist `notenverwaltung-spezifikation.md`, Arbeitsvorgaben stehen in
 | Verwaltungsoberfläche | 5.5 | umgesetzt (Schritt 5b) |
 | Klassen- und Schüleransicht, Suche | 5.1, 5.2 | umgesetzt (Schritt 5c) |
 | Serieneingabe von Noten, Änderungshistorie | 5.4, 3.2 | umgesetzt (Schritt 5d) |
-| Kurs-/Fachübersicht | 5.3 | offen |
+| Kurs-/Fachübersicht | 5.3 | umgesetzt (Schritt 5e) |
 | Fotoerfassung | 7 | offen |
 | Export | 8 | offen |
 | Backup-Skript, Docker | 2.5 | offen |
@@ -184,6 +184,35 @@ abgenommen.
 Fällt JavaScript ganz aus, bleibt jede Zeile ein gewöhnliches Formular mit
 Absendeknopf; die Seite lädt neu und zeigt den gespeicherten Stand. Auch ein
 JS-Fehler kann damit keine Note still verschlucken.
+
+## Kursübersicht — bewusste Abweichung von 5.3
+
+Die Spezifikation nennt in 5.3 eine Spalte „Gruppenmittel". **Die gibt es
+nicht.** Seit die Berechnung einstufig ist, kommt ein Mittel je Notengruppe
+darin nicht mehr vor, und das Gesamtmittel ist ausdrücklich *nicht* der
+gewichtete Mittelwert solcher Gruppenmittel. Eine Spalte, die zum Nachrechnen
+einlädt und dabei nicht aufgeht, richtet mehr Schaden an als Nutzen.
+
+Sichtbar bleibt die **Gruppengewichtung**, wie in 5.3 gefordert.
+
+### Notenspiegel
+
+Unter der Matrix steht je Leistung eine Zeile mit Durchschnitt und der
+Verteilung auf die Notenstufen 1 bis 6:
+
+- Tendenznoten zählen zu ihrer ganzen Stufe — 2+ und 2− stehen beide in
+  Spalte 2.
+- `nicht erbracht` zählt als 6, in Durchschnitt **und** Verteilung.
+- `nicht gewertet` fällt aus beidem heraus und steht in einer eigenen Spalte.
+  Sonst sähe eine Klassenarbeit mit vielen Entschuldigten besser aus, als sie
+  war.
+
+Der Durchschnitt einer Leistung ist ein schlichtes Mittel über die
+Teilnehmer; das Leistungsgewicht wirkt nur innerhalb der Note eines einzelnen
+Schülers, nicht zwischen Schülern.
+
+Die Übersicht ist nur lesend. Jede Spaltenüberschrift verlinkt in die
+Serieneingabe.
 
 ## Änderungshistorie
 

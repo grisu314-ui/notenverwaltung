@@ -4,7 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
-from app.db.models import Klasse, Schueler
+from app.db.models import Klasse, Kurs, Schueler
+from app.services import kursblatt as kursblattdienst
 from app.services import suche as suchdienst
 from app.services.schuelerblatt import blatt
 from app.services.settings import lies_einstellungen
@@ -43,6 +44,30 @@ def klassenansicht(
             "schueler": sortierte_schueler(aktive, einstellungen.sortierung),
             "einstellungen": einstellungen,
             "ziel": f"/klassen/{klasse_id}",
+        },
+    )
+
+
+@router.get("/kurse/{kurs_id}", response_class=HTMLResponse)
+def kursuebersicht(
+    request: Request,
+    kurs_id: int,
+    ansicht: str = kursblattdienst.ANSICHT_HALBJAHR_1,
+    session: Session = Depends(datenbanksitzung),
+):
+    """Matrix of all grades of all participants (5.3), read-only."""
+    kurs = hole(session, Kurs, kurs_id)
+    return templates.TemplateResponse(
+        request=request,
+        name="kursuebersicht.html",
+        context={
+            "blatt": kursblattdienst.blatt(session, kurs, ansicht),
+            "einstellungen": lies_einstellungen(session),
+            "ansichten": (
+                (kursblattdienst.ANSICHT_HALBJAHR_1, "Halbjahr 1"),
+                (kursblattdienst.ANSICHT_HALBJAHR_2, "Halbjahr 2"),
+                (kursblattdienst.ANSICHT_JAHR, "Jahr"),
+            ),
         },
     )
 

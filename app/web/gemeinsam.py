@@ -8,7 +8,7 @@ from fastapi import HTTPException
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from app.grading.notenwert import als_anzeige
+from app.grading.notenwert import als_anzeige, als_dezimalanzeige
 from app.services.sorting import anzeigename, namensschluessel, vereinfacht
 
 VERZEICHNIS = Path(__file__).resolve().parent
@@ -18,6 +18,8 @@ templates.env.filters["anzeigename"] = anzeigename
 # 0.7 is shown as "1+", never as "0,7" (specification 4.1).
 templates.env.filters["note_anzeige"] = als_anzeige
 templates.env.filters["uhrzeit"] = lambda wert: uhrzeit(wert)
+# Calculated values in German notation: "2,6".
+templates.env.filters["dezimal"] = als_dezimalanzeige
 
 ANZEIGEZONE = ZoneInfo("Europe/Berlin")
 
