@@ -59,7 +59,10 @@
   </p>
   <script src="/static/zuschnitt.js" defer></script>
 
-  <form method="post" action="/verwaltung/schueler/{{ schueler.id }}/loeschen">
-    <button type="submit" class="gefahr">Schüler löschen</button>
-  </form>
+  <h2>Endgültig löschen</h2>
+  <p class="hinweis">
+    Entfernt den Schüler mit Noten, Foto und Änderungshistorie. Die nächste
+    Seite zeigt, was genau verschwindet.
+  </p>
+  <p><a class="kachel gefahrlink" href="/verwaltung/loeschen/schueler/{{ schueler.id }}">Löschen vorbereiten</a></p>
 {% endblock %}

@@ -258,7 +258,9 @@ def setze_teilnahme(
 
 
 # ---------------------------------------------------------------------------
-# Deletion: only what is empty.
+# Deletion: only what is empty. Pupils and school years are the exception --
+# section 11 demands a complete removal for those, and it lives in
+# app/services/loeschen.py behind its own confirmation page.
 #
 # The cascades in the schema are sharp. Deleting a grade group that holds
 # assessments would take thirty grades with it behind a single button. The
@@ -287,13 +289,6 @@ def loesche_kurs(session: Session, kurs: Kurs) -> None:
     session.flush()
 
 
-def loesche_schueler(session: Session, schueler: Schueler) -> None:
-    if schueler.noten:
-        _verweigere("Der Schüler", "Noten")
-    session.delete(schueler)
-    session.flush()
-
-
 def loesche_klasse(session: Session, klasse: Klasse) -> None:
     if klasse.schueler:
         _verweigere("Die Klasse", "Schüler")
@@ -303,8 +298,3 @@ def loesche_klasse(session: Session, klasse: Klasse) -> None:
     session.flush()
 
 
-def loesche_schuljahr(session: Session, schuljahr: Schuljahr) -> None:
-    if schuljahr.klassen:
-        _verweigere("Das Schuljahr", "Klassen")
-    session.delete(schuljahr)
-    session.flush()

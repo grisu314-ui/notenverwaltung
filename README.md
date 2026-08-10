@@ -18,7 +18,7 @@ Maßgeblich ist `notenverwaltung-spezifikation.md`, Arbeitsvorgaben stehen in
 | Fotoerfassung | 7 | umgesetzt (Schritt 5f) |
 | Export | 8, 11 | umgesetzt |
 | Backup-Skript, Docker | 2, 2.5 | umgesetzt, Image noch nicht gebaut |
-| Löschfunktion | 11 | Kaskaden im Schema vorhanden, Bedienung offen |
+| Löschfunktion | 11 | umgesetzt |
 | Punkteeingabe, Notenschlüssel | 4.2, 4.3, 5.4 | **wird nicht gebaut**, siehe unten |
 
 ## Bewusste Abweichung: keine Punkteeingabe
@@ -419,12 +419,61 @@ Kurse, ein Schuljahr ohne Klassen, ein Schüler ohne Noten.
 
 Grund: Die Fremdschlüssel im Schema löschen kaskadierend. Ein Knopf
 „Notengruppe löschen" nähme sonst im Zweifel dreißig Noten mit, ohne dass das
-sichtbar wäre. Das endgültige Löschen mit Inhalt gehört in die Löschfunktion
-nach Abschnitt 11 und erhält dort eine Bestätigung mit Angabe der betroffenen
-Datensätze.
+sichtbar wäre. Das endgültige Löschen mit Inhalt läuft über die Löschfunktion
+nach Abschnitt 11 (siehe unten).
 
 Ein Schüler, der die Klasse verlässt, wird **nicht** gelöscht, sondern auf
 inaktiv gesetzt; seine Noten bleiben erhalten.
+
+## Löschfunktion (Abschnitt 11)
+
+Endgültig löschen lassen sich zwei Dinge: ein **Schüler** mit allem, was an
+ihm hängt, und ein **Schuljahr** mit allem darunter. Die Einstiege stehen
+unten auf der jeweiligen Verwaltungsseite.
+
+Der Ablauf hat zwei Schritte:
+
+1. Eine Bestätigungsseite zählt auf, was verschwindet — Noten, Fotos,
+   Einträge der Änderungshistorie, Kursteilnahmen, festgesetzte Noten, jeweils
+   mit Anzahl. Gelöscht wird hier noch nichts.
+2. Erst wenn der Name des Schülers bzw. die Bezeichnung des Schuljahres
+   eingetippt wurde, entfernt die zweite Anfrage die Daten. Der Vergleich
+   nutzt dieselbe Normalisierung wie die Sortierung: „Anne Ozturk" genügt für
+   „Änne Öztürk". Geprüft wird die Absicht, nicht die Tippgenauigkeit.
+
+Ins Protokoll gehen nur die ID und die Anzahlen — **nie der Name**. Eine
+Protokollzeile mit Klarnamen würde genau das aufbewahren, was der Vorgang
+entfernen soll.
+
+### Die Daten verlassen wirklich die Datei
+
+`DELETE` gibt in SQLite die Seiten nur frei; die Bytes eines gelöschten
+Lichtbilds stehen danach weiter in der Datei. Nach dem Löschen läuft deshalb
+`VACUUM` **und** `PRAGMA wal_checkpoint(TRUNCATE)`.
+
+Beides ist nötig. `VACUUM` allein schreibt die neue Datei im WAL-Modus *durch*
+die `-wal`-Datei, in der der alte Inhalt bis zum nächsten Checkpoint lesbar
+bleibt. Gemessen, nicht angenommen: `tests/test_loeschen.py` legt ein Foto mit
+einer erkennbaren Bytefolge an und sucht danach in den Rohdateien —
+`test_vacuum_allein_laesst_die_fotobytes_im_wal_stehen` hält den Zwischenstand
+fest, `test_nach_dem_verdichten_sind_die_fotobytes_aus_der_datei_verschwunden`
+das Ergebnis.
+
+Das Verdichten läuft **nach** dem Commit. Kommt `VACUUM` nicht an seine Sperre
+— realistischer Fall: das Sicherungsskript läuft gerade —, sind die Zeilen
+gelöscht, die Bytes aber nicht. Dann steht das so in der Rückmeldung und der
+Grund im Protokoll; als schlichtes „Gelöscht." gemeldet wäre es eine falsche
+Zusage. Ein späterer Lauf des Sicherungsskripts hat darauf keinen Einfluss;
+zum Nachholen genügt `VACUUM;` gefolgt von `PRAGMA wal_checkpoint(TRUNCATE);`
+in `sqlite3` auf der Datei — bei gestoppter Anwendung.
+
+### Was das Löschen nicht erreicht
+
+**Die Sicherungen.** Ein gelöschter Schüler steht im Stand von gestern Nacht
+weiterhin drin und verschwindet dort erst, wenn die aufbewahrten Sicherungen
+durchgelaufen sind (Aufbewahrung siehe „Sicherung und Wiederherstellung").
+Die Bestätigungsseite sagt das ausdrücklich. Wer sofortige Löschung braucht,
+muss die betroffenen Sicherungsdateien von Hand entfernen.
 
 ## Anwendung starten
 
