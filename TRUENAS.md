@@ -234,37 +234,31 @@ Compose-Datei bindet im Zweifel das falsche Verzeichnis ein.
 
 **Zwei Werte sind einzutragen:**
 
-1. `tailscale/tailscale:VERSION` — der Platzhalter steht absichtlich so da:
-   Der Stack startet nicht, bis eine Version eingetragen ist. `latest` wäre
-   die schlechtere Wahl, der Sidecar tauscht sich sonst irgendwann unbemerkt
-   aus.
+1. `tailscale/tailscale:VERSION` — **beim ersten Mal `latest` eintragen.**
+   Das läuft, und Sie kommen ohne Umweg zu einem laufenden Stack.
 
-   **Es muss eine aktuelle Version sein.** Dieser Aufbau setzt voraus, dass
-   das Image von selbst startet und dabei `TS_AUTHKEY` auswertet — das macht
-   das Programm `containerboot`, das erst in neueren Tailscale-Images steckt.
-   Ältere Images haben als Kommando ein blankes `/bin/sh`, das sofort wieder
-   endet; der Stack läuft dann nie an (siehe „Störungssuche").
+   Der Grund für den Platzhalter: Dieser Aufbau setzt voraus, dass das Image
+   von selbst startet und dabei `TS_AUTHKEY` auswertet — das macht das
+   Programm `containerboot`, das erst in neueren Tailscale-Images steckt.
+   Ältere Images führen nur ein blankes `/bin/sh` aus, das sofort endet; der
+   Stack läuft dann nie an (siehe „Störungssuche"). Eine geratene
+   Versionsnummer trifft diesen Fall leicht.
 
-   Aktuelle Version einmal holen und ablesen, dann genau die eintragen:
+   Die Version Ihres **bestehenden** Tailscale-Containers ist dabei kein
+   guter Anhaltspunkt — sie kann Jahre alt sein und trotzdem laufen, weil
+   dieser Container anders gestartet wird.
 
-   ```bash
-   docker pull tailscale/tailscale:latest
-   docker run --rm --entrypoint tailscale tailscale/tailscale:latest version
-   ```
-
-   Vor dem Eintragen prüfen, dass das Image wirklich selbst startet:
+   **Sobald der Stack läuft, die Version festnageln.** Sie am laufenden
+   Container ablesen und eintragen:
 
    ```bash
-   docker image inspect tailscale/tailscale:latest \
-       --format '{{.Config.Entrypoint}} {{.Config.Cmd}}'
+   docker exec notenverwaltung-tailscale tailscale version | head -1
    ```
 
-   Erwartet wird `containerboot`. Steht dort `[/bin/sh]`, ist das Image zu
-   alt und dieser Aufbau funktioniert damit nicht.
-
-   Die Version Ihres **bestehenden** Tailscale-Containers ist kein guter
-   Anhaltspunkt — sie kann Jahre alt sein und trotzdem laufen, weil dieser
-   Container anders gestartet wird.
+   Aus `1.90.2` wird `image: tailscale/tailscale:v1.90.2`, dann neu
+   deployen. Damit bleibt der Sidecar auf einem Stand, der nachweislich
+   funktioniert hat, statt sich beim nächsten Pull unbemerkt auszutauschen.
+   `latest` ist der Weg zum ersten Start, nicht der Dauerzustand.
 
 2. `notenverwaltung:JJJJ-MM-TT` — der Tag aus Schritt 3. Genau so, wie
    `docker images notenverwaltung` ihn anzeigt.
