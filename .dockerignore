@@ -6,10 +6,13 @@ __pycache__
 tests
 data
 backups
+daten
+sicherungen
 *.db
 *.db-wal
 *.db-shm
 .env
 README.md
+TRUENAS.md
 notenverwaltung-spezifikation.md
 CLAUDE.md

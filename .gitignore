@@ -4,6 +4,10 @@ __pycache__/
 
 # Local database files. The productive database never lives in the repository.
 data/
+# On the NAS the working tree sits one level above these two directories;
+# see TRUENAS.md, step 2.
+daten/
+sicherungen/
 *.db
 *.db-wal
 *.db-shm

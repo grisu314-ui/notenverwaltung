@@ -1,0 +1,58 @@
+# Variante für TrueNAS SCALE mit Dockge. Anleitung: TRUENAS.md
+#
+# Unterschied zur docker-compose.yml: kein Build-Schritt. Dockge führt
+# `docker compose` in seinem eigenen Container aus, ein Build-Kontext müsste
+# dort unter identischem Pfad sichtbar sein. Gebaut wird deshalb in der Shell
+# (TRUENAS.md, Schritt 3), hier läuft nur noch das fertige Image.
+#
+# Der Inhalt dieser Datei gehört in den Dockge-Editor. Vor dem ersten Start
+# sind genau zwei Werte einzutragen:
+#   1. VERSION beim Tailscale-Image
+#   2. der Tag des gebauten Images bei `notenverwaltung:`
+# Dazu die Datei .env im Stack-Verzeichnis mit TS_AUTHKEY.
+
+services:
+  tailscale:
+    # Feste Version, nie latest -- sonst tauscht sich der Sidecar unbemerkt
+    # aus. Vorhandene Version ermitteln:
+    #   docker ps --filter ancestor=tailscale/tailscale --format '{{.Image}}'
+    image: tailscale/tailscale:VERSION
+    container_name: notenverwaltung-tailscale
+    hostname: notenverwaltung
+    environment:
+      # Der Schlüssel gehört Ihrer Infrastruktur, nicht der Anwendung.
+      # Die Anwendung selbst hat kein einziges Geheimnis.
+      TS_AUTHKEY: ${TS_AUTHKEY:?TS_AUTHKEY fehlt - bitte in .env eintragen}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_HOSTNAME: notenverwaltung
+    volumes:
+      - tailscale-zustand:/var/lib/tailscale
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    restart: unless-stopped
+
+  notenverwaltung:
+    # Der Tag aus dem Build-Schritt, Datum statt latest: er ist gleichzeitig
+    # die Rollback-Marke.
+    image: notenverwaltung:JJJJ-MM-TT
+    # Ohne diese Zeile würde Compose bei einem vertippten Tag versuchen, ein
+    # fremdes Image gleichen Namens aus dem Netz zu holen.
+    pull_policy: never
+    container_name: notenverwaltung
+    # Kein ports-Eintrag und keiner möglich: der Container hängt im Netz des
+    # Sidecars und ist ausschließlich über den Tailnet-Namen erreichbar.
+    network_mode: service:tailscale
+    depends_on:
+      - tailscale
+    volumes:
+      # Lokales Dataset, niemals eine SMB- oder NFS-Freigabe
+      # (Spezifikation 2, Punkt 2).
+      - /mnt/Daten-Z1/apps/notenverwaltung/daten:/daten
+      # Getrenntes Ziel, damit es auf ein Snapshot-Dataset zeigen kann.
+      - /mnt/Daten-Z1/apps/notenverwaltung/sicherungen:/sicherungen
+    restart: unless-stopped
+
+volumes:
+  tailscale-zustand:
