@@ -16,8 +16,14 @@
 services:
   tailscale:
     # Feste Version, nie latest -- sonst tauscht sich der Sidecar unbemerkt
-    # aus. Vorhandene Version ermitteln:
-    #   docker ps --filter ancestor=tailscale/tailscale --format '{{.Image}}'
+    # aus. Es muss aber eine AKTUELLE sein: dieser Aufbau setzt voraus, dass
+    # das Image von selbst startet und TS_AUTHKEY auswertet (Programm
+    # `containerboot`). Aeltere Images fuehren nur /bin/sh aus, das sofort
+    # endet -- der Stack laeuft dann nie an. Ermitteln und pruefen:
+    #   docker pull tailscale/tailscale:latest
+    #   docker run --rm --entrypoint tailscale tailscale/tailscale:latest version
+    #   docker image inspect tailscale/tailscale:latest \
+    #       --format '{{.Config.Entrypoint}} {{.Config.Cmd}}'   # containerboot
     image: tailscale/tailscale:VERSION
     container_name: notenverwaltung-tailscale
     hostname: notenverwaltung

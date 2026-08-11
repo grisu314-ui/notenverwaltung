@@ -237,12 +237,34 @@ Compose-Datei bindet im Zweifel das falsche Verzeichnis ein.
 1. `tailscale/tailscale:VERSION` — der Platzhalter steht absichtlich so da:
    Der Stack startet nicht, bis eine Version eingetragen ist. `latest` wäre
    die schlechtere Wahl, der Sidecar tauscht sich sonst irgendwann unbemerkt
-   aus. Sinnvoll ist die Version, die Ihr bestehender Tailscale-Container auf
-   dem NAS bereits verwendet:
+   aus.
+
+   **Es muss eine aktuelle Version sein.** Dieser Aufbau setzt voraus, dass
+   das Image von selbst startet und dabei `TS_AUTHKEY` auswertet — das macht
+   das Programm `containerboot`, das erst in neueren Tailscale-Images steckt.
+   Ältere Images haben als Kommando ein blankes `/bin/sh`, das sofort wieder
+   endet; der Stack läuft dann nie an (siehe „Störungssuche").
+
+   Aktuelle Version einmal holen und ablesen, dann genau die eintragen:
 
    ```bash
-   docker ps --filter ancestor=tailscale/tailscale --format '{{.Image}}'
+   docker pull tailscale/tailscale:latest
+   docker run --rm --entrypoint tailscale tailscale/tailscale:latest version
    ```
+
+   Vor dem Eintragen prüfen, dass das Image wirklich selbst startet:
+
+   ```bash
+   docker image inspect tailscale/tailscale:latest \
+       --format '{{.Config.Entrypoint}} {{.Config.Cmd}}'
+   ```
+
+   Erwartet wird `containerboot`. Steht dort `[/bin/sh]`, ist das Image zu
+   alt und dieser Aufbau funktioniert damit nicht.
+
+   Die Version Ihres **bestehenden** Tailscale-Containers ist kein guter
+   Anhaltspunkt — sie kann Jahre alt sein und trotzdem laufen, weil dieser
+   Container anders gestartet wird.
 
 2. `notenverwaltung:JJJJ-MM-TT` — der Tag aus Schritt 3. Genau so, wie
    `docker images notenverwaltung` ihn anzeigt.
@@ -502,10 +524,14 @@ Was dort typischerweise steht, und was es bedeutet:
 
 | Im Protokoll | Ursache | Abhilfe |
 |---|---|---|
+| **gar nichts**, `docker ps -a` zeigt `Restarting (0)` und als Kommando `"/bin/sh"` | **Das Tailscale-Image ist zu alt.** Ohne `containerboot` startet nur eine Shell, die sofort endet — Rückgabewert 0, kein Protokoll | Aktuelle Version eintragen, siehe Schritt 5 |
 | `invalid key`, `unauthorized`, `key expired` | Auth-Key abgelaufen, schon verbraucht oder falsch kopiert | Neuen Key erzeugen, `.env` ändern, neu deployen |
 | `wgengine`, `tun`, `/dev/net/tun` | Das TUN-Gerät fehlt auf dem Host | `ls -l /dev/net/tun` — fehlt es, `modprobe tun` und den Stack neu deployen |
 | `permission denied` auf `/var/lib/tailscale` | Zustandsverzeichnis gehört nicht root | `chown -R root:root …/tailscale` |
-| gar nichts, Container endet sofort | Image-Tag zeigt auf etwas anderes als erwartet | `docker inspect notenverwaltung-tailscale --format '{{.Config.Image}}'` |
+Der Rückgabewert in `docker ps -a` trennt die Fälle: `Restarting (0)` heißt,
+der Container ist **ordentlich beendet** worden — dann lief kein Dienst, das
+ist der Fall „Image zu alt". Ein Wert ungleich 0 heißt, tailscaled ist
+angelaufen und dann gescheitert; dann steht der Grund im Protokoll.
 
 Solange der Sidecar nicht dauerhaft läuft, ist die zweite Meldung ohne
 Aussagekraft. Erst wenn `docker ps` ihn als `Up` zeigt, lohnt der Blick auf
