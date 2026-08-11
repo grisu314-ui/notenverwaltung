@@ -138,8 +138,10 @@ Excel-Import kann den Header aufbrechen. **Der Export enthält Klarnamen.**
 ## Betrieb im Container
 
 > **Für TrueNAS SCALE mit Dockge gibt es eine eigene Schritt-für-Schritt-Anleitung:
-> [`TRUENAS.md`](TRUENAS.md).** Dieser Abschnitt beschreibt den allgemeinen
-> Aufbau und gilt ebenso für einen Raspberry Pi.
+> [`TRUENAS.md`](TRUENAS.md)** und dazu die passende Compose-Datei
+> `docker-compose.truenas.yml` (ohne Build-Schritt). Dieser Abschnitt
+> beschreibt den allgemeinen Aufbau und die Variante mit `docker compose
+> build`, wie sie auf dem Raspberry Pi als Teststand verwendet wird.
 
 Aufbau: ein eigener **Tailscale-Container** als Sidecar, die Anwendung teilt
 sich dessen Netz-Namespace. Sie veröffentlicht damit keinen eigenen Port und
@@ -178,7 +180,7 @@ Datenverzeichnis einem anderen Benutzer, startet der Container zwar, kann aber
 nicht schreiben. Das Fehlerbild ist `unable to open database file`. Abhilfe:
 
 ```bash
-chown -R 1000:1000 /mnt/tank/notenverwaltung/daten /mnt/tank/notenverwaltung/sicherungen
+chown -R 1000:1000 /mnt/Daten-Z1/apps/notenverwaltung/daten /mnt/Daten-Z1/apps/notenverwaltung/sicherungen
 ```
 
 ### Aktualisieren
@@ -235,9 +237,9 @@ Per Cron auf dem TrueNAS-Host, zum Beispiel nächtlich um 2 Uhr:
 
 ```bash
 docker compose down
-cp /mnt/tank/notenverwaltung/sicherungen/notenverwaltung-JJJJ-MM-TT-HHMMSS.db \
-   /mnt/tank/notenverwaltung/daten/notenverwaltung.db
-chown 1000:1000 /mnt/tank/notenverwaltung/daten/notenverwaltung.db
+cp /mnt/Daten-Z1/apps/notenverwaltung/sicherungen/notenverwaltung-JJJJ-MM-TT-HHMMSS.db \
+   /mnt/Daten-Z1/apps/notenverwaltung/daten/notenverwaltung.db
+chown 1000:1000 /mnt/Daten-Z1/apps/notenverwaltung/daten/notenverwaltung.db
 docker compose up -d
 ```
 

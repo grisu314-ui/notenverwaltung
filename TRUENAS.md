@@ -43,10 +43,10 @@ Zwei getrennte Verzeichnisse, damit die Sicherungen auf ein Dataset mit
 eigener Snapshot-Aufbewahrung zeigen können:
 
 ```bash
-mkdir -p /mnt/tank/notenverwaltung/daten
-mkdir -p /mnt/tank/notenverwaltung/sicherungen
-chown -R 1000:1000 /mnt/tank/notenverwaltung/daten \
-                   /mnt/tank/notenverwaltung/sicherungen
+mkdir -p /mnt/Daten-Z1/apps/notenverwaltung/daten
+mkdir -p /mnt/Daten-Z1/apps/notenverwaltung/sicherungen
+chown -R 1000:1000 /mnt/Daten-Z1/apps/notenverwaltung/daten \
+                   /mnt/Daten-Z1/apps/notenverwaltung/sicherungen
 ```
 
 Die Anwendung läuft als UID/GID 1000, nicht als root. Gehört das Verzeichnis
@@ -63,7 +63,7 @@ das Fehlerbild ist `unable to open database file`.
 
 ```bash
 git clone https://github.com/grisu314-ui/notenverwaltung.git \
-    /mnt/tank/notenverwaltung/quelle
+    /mnt/Daten-Z1/apps/notenverwaltung/quelle
 ```
 
 Das Verzeichnis wird nur zum Bauen gebraucht. Es enthält keine Daten und darf
@@ -77,7 +77,7 @@ NAS" am Ende.
 ## Schritt 3 — Image bauen
 
 ```bash
-cd /mnt/tank/notenverwaltung/quelle
+cd /mnt/Daten-Z1/apps/notenverwaltung/quelle
 git pull
 docker build -t notenverwaltung:$(date +%Y-%m-%d) .
 docker images notenverwaltung
@@ -100,59 +100,39 @@ Geheimnis.
 
 ## Schritt 4 — Stack in Dockge anlegen
 
-In Dockge einen neuen Stack `notenverwaltung` anlegen und folgende
-`compose.yaml` eintragen. Sie unterscheidet sich von der `docker-compose.yml`
-im Repository an genau einer Stelle: `image:` statt `build:`.
+Die fertige Compose-Datei liegt im Repository: **`docker-compose.truenas.yml`**.
+Sie unterscheidet sich von `docker-compose.yml` nur darin, dass sie ein
+fertiges Image verwendet statt zu bauen. Die Pfade unter `volumes` stimmen
+bereits.
 
-```yaml
-services:
-  tailscale:
-    image: tailscale/tailscale:VERSION   # <-- eintragen, siehe unten
-    container_name: notenverwaltung-tailscale
-    hostname: notenverwaltung
-    environment:
-      TS_AUTHKEY: ${TS_AUTHKEY:?TS_AUTHKEY fehlt - bitte in .env eintragen}
-      TS_STATE_DIR: /var/lib/tailscale
-      TS_HOSTNAME: notenverwaltung
-    volumes:
-      - tailscale-zustand:/var/lib/tailscale
-      - /dev/net/tun:/dev/net/tun
-    cap_add:
-      - NET_ADMIN
-      - NET_RAW
-    restart: unless-stopped
-
-  notenverwaltung:
-    image: notenverwaltung:2026-08-11    # der Tag aus Schritt 3
-    pull_policy: never                   # nie aus einer Registry ziehen
-    container_name: notenverwaltung
-    # Kein ports-Eintrag und keiner möglich: der Container hängt im Netz des
-    # Sidecars und ist ausschließlich über den Tailnet-Namen erreichbar.
-    network_mode: service:tailscale
-    depends_on:
-      - tailscale
-    volumes:
-      - /mnt/tank/notenverwaltung/daten:/daten
-      - /mnt/tank/notenverwaltung/sicherungen:/sicherungen
-    restart: unless-stopped
-
-volumes:
-  tailscale-zustand:
-```
-
-`pull_policy: never` ist Absicht: Ohne diese Zeile würde Compose bei einem
-vertippten Tag versuchen, ein fremdes Image gleichen Namens aus dem Netz zu
-holen. Mit ihr scheitert der Start stattdessen sichtbar.
-
-`VERSION` beim Tailscale-Image ist ein **Platzhalter** und steht absichtlich
-so da: Der Stack startet damit nicht, bis Sie eine Version eingetragen haben.
-`latest` wäre die schlechtere Wahl — der Sidecar tauscht sich sonst
-irgendwann unbemerkt aus. Sinnvoll ist die Version, die Ihr bestehender
-Tailscale-Container auf dem NAS bereits verwendet:
+In Dockge einen neuen Stack `notenverwaltung` anlegen und den Inhalt in den
+Editor kopieren:
 
 ```bash
-docker ps --filter ancestor=tailscale/tailscale --format '{{.Image}}'
+cat /mnt/Daten-Z1/apps/notenverwaltung/quelle/docker-compose.truenas.yml
 ```
+
+Die Datei steht bewusst **nur einmal** im Projekt, statt hier noch einmal
+abgedruckt zu werden — zwei Kopien laufen auseinander, und eine veraltete
+Compose-Datei bindet im Zweifel das falsche Verzeichnis ein.
+
+**Zwei Werte sind einzutragen:**
+
+1. `tailscale/tailscale:VERSION` — der Platzhalter steht absichtlich so da:
+   Der Stack startet nicht, bis eine Version eingetragen ist. `latest` wäre
+   die schlechtere Wahl, der Sidecar tauscht sich sonst irgendwann unbemerkt
+   aus. Sinnvoll ist die Version, die Ihr bestehender Tailscale-Container auf
+   dem NAS bereits verwendet:
+
+   ```bash
+   docker ps --filter ancestor=tailscale/tailscale --format '{{.Image}}'
+   ```
+
+2. `notenverwaltung:JJJJ-MM-TT` — der Tag aus Schritt 3.
+
+`pull_policy: never` bleibt stehen. Ohne diese Zeile würde Compose bei einem
+vertippten Tag versuchen, ein fremdes Image gleichen Namens aus dem Netz zu
+holen; mit ihr scheitert der Start stattdessen sichtbar.
 
 ### Die `.env` daneben
 
@@ -185,18 +165,18 @@ ersten Start deshalb einmal:
 
 ```bash
 docker run --rm \
-    -v /mnt/tank/notenverwaltung/daten:/daten \
+    -v /mnt/Daten-Z1/apps/notenverwaltung/daten:/daten \
     --entrypoint alembic \
     notenverwaltung:2026-08-11 upgrade head
 ```
 
 Das läuft ohne Compose und ohne den Tailscale-Sidecar. Danach steht
-`/mnt/tank/notenverwaltung/daten/notenverwaltung.db` bereit.
+`/mnt/Daten-Z1/apps/notenverwaltung/daten/notenverwaltung.db` bereit.
 
 Prüfen, dass die Datei UID 1000 gehört:
 
 ```bash
-ls -l /mnt/tank/notenverwaltung/daten/
+ls -l /mnt/Daten-Z1/apps/notenverwaltung/daten/
 ```
 
 ---
@@ -245,9 +225,9 @@ im System sind:
 
 ```bash
 # Stack in Dockge stoppen, dann:
-cp /mnt/tank/notenverwaltung/sicherungen/notenverwaltung-JJJJ-MM-TT-HHMMSS.db \
-   /mnt/tank/notenverwaltung/daten/notenverwaltung.db
-chown 1000:1000 /mnt/tank/notenverwaltung/daten/notenverwaltung.db
+cp /mnt/Daten-Z1/apps/notenverwaltung/sicherungen/notenverwaltung-JJJJ-MM-TT-HHMMSS.db \
+   /mnt/Daten-Z1/apps/notenverwaltung/daten/notenverwaltung.db
+chown 1000:1000 /mnt/Daten-Z1/apps/notenverwaltung/daten/notenverwaltung.db
 # Stack wieder starten
 ```
 
@@ -267,7 +247,7 @@ starten.**
 
 ```bash
 # 1. Neue Quelle holen und bauen
-cd /mnt/tank/notenverwaltung/quelle
+cd /mnt/Daten-Z1/apps/notenverwaltung/quelle
 git pull
 docker build -t notenverwaltung:2026-09-01 .
 
@@ -275,14 +255,14 @@ docker build -t notenverwaltung:2026-09-01 .
 
 # 3. Sicherung ziehen -- mit dem ALTEN Image, gegen die unveränderte Datei
 docker run --rm \
-    -v /mnt/tank/notenverwaltung/daten:/daten \
-    -v /mnt/tank/notenverwaltung/sicherungen:/sicherungen \
+    -v /mnt/Daten-Z1/apps/notenverwaltung/daten:/daten \
+    -v /mnt/Daten-Z1/apps/notenverwaltung/sicherungen:/sicherungen \
     --entrypoint python \
     notenverwaltung:2026-08-11 scripts/backup.py /sicherungen
 
 # 4. Migration mit dem NEUEN Image
 docker run --rm \
-    -v /mnt/tank/notenverwaltung/daten:/daten \
+    -v /mnt/Daten-Z1/apps/notenverwaltung/daten:/daten \
     --entrypoint alembic \
     notenverwaltung:2026-09-01 upgrade head
 
