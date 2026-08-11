@@ -137,6 +137,10 @@ Excel-Import kann den Header aufbrechen. **Der Export enthält Klarnamen.**
 
 ## Betrieb im Container
 
+> **Für TrueNAS SCALE mit Dockge gibt es eine eigene Schritt-für-Schritt-Anleitung:
+> [`TRUENAS.md`](TRUENAS.md).** Dieser Abschnitt beschreibt den allgemeinen
+> Aufbau und gilt ebenso für einen Raspberry Pi.
+
 Aufbau: ein eigener **Tailscale-Container** als Sidecar, die Anwendung teilt
 sich dessen Netz-Namespace. Sie veröffentlicht damit keinen eigenen Port und
 ist außerhalb des Tailnets nicht erreichbar (Spezifikation 2, Punkt 6). Ein

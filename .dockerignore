@@ -11,5 +11,6 @@ backups
 *.db-shm
 .env
 README.md
+TRUENAS.md
 notenverwaltung-spezifikation.md
 CLAUDE.md

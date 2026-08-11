@@ -1,0 +1,367 @@
+# Inbetriebnahme auf TrueNAS SCALE
+
+Diese Anleitung beschreibt den vollständigen Weg von der Quelle bis zum
+laufenden Stack in Dockge. Sie ergänzt den Abschnitt „Betrieb im Container"
+in `README.md` um das, was auf TrueNAS anders ist.
+
+Vorausgesetzt: TrueNAS SCALE mit Docker (ab 24.10 „Electric Eel"), Dockge als
+App, Shell-Zugang als `root`. Prüfen:
+
+```bash
+docker version
+docker compose version
+```
+
+---
+
+## Warum hier gebaut wird und nicht auf dem Pi
+
+TrueNAS SCALE gibt es nur für x86-64, der Raspberry Pi ist `aarch64`. Ein auf
+dem Pi gebautes Image startet auf TrueNAS **nicht** — Fehlerbild
+`exec format error`. Es gibt keinen Grund, den Umweg über eine Registry oder
+einen Multi-Arch-Build unter Emulation zu gehen: Der Docker-Daemon auf dem NAS
+baut das Image in ein paar Minuten selbst.
+
+Der Pi bleibt als Teststand nützlich. Dort wird dasselbe Repository
+unabhängig für `arm64` gebaut; im Dockerfile ist nichts architekturabhängig.
+Bedingung ist ein **64-bit-Betriebssystem** auf dem Pi (`uname -m` muss
+`aarch64` melden) — auf `armv7l` fehlt für `pydantic-core` ein fertiges Wheel.
+
+**Gebaut wird in der Shell, nicht in Dockge.** Dockge führt `docker compose`
+in seinem eigenen Container aus; ein Build-Kontext müsste dort unter
+identischem Pfad sichtbar sein. Diese Zusatzbedingung muss nach jedem
+Dockge-Update wieder stimmen. Außerdem beherrscht Dockge kein
+`docker compose run`, das für das erstmalige Anlegen der Datenbank und für
+Migrationen gebraucht wird — die Shell brauchen Sie also ohnehin. Dockge
+startet und stoppt den Stack, mehr nicht.
+
+---
+
+## Schritt 1 — Datasets und Rechte
+
+Zwei getrennte Verzeichnisse, damit die Sicherungen auf ein Dataset mit
+eigener Snapshot-Aufbewahrung zeigen können:
+
+```bash
+mkdir -p /mnt/tank/notenverwaltung/daten
+mkdir -p /mnt/tank/notenverwaltung/sicherungen
+chown -R 1000:1000 /mnt/tank/notenverwaltung/daten \
+                   /mnt/tank/notenverwaltung/sicherungen
+```
+
+Die Anwendung läuft als UID/GID 1000, nicht als root. Gehört das Verzeichnis
+einem anderen Benutzer, startet der Container zwar, kann aber nicht schreiben;
+das Fehlerbild ist `unable to open database file`.
+
+> Die SQLite-Datei gehört auf ein **lokales** Dataset, nie auf eine SMB- oder
+> NFS-Freigabe (Spezifikation 2, Punkt 2). Netzwerkdateisysteme setzen die
+> Sperren nicht zuverlässig um, die SQLite für WAL braucht.
+
+---
+
+## Schritt 2 — Quelle auf das NAS
+
+```bash
+git clone https://github.com/grisu314-ui/notenverwaltung.git \
+    /mnt/tank/notenverwaltung/quelle
+```
+
+Das Verzeichnis wird nur zum Bauen gebraucht. Es enthält keine Daten und darf
+auf einem Dataset ohne Snapshots liegen.
+
+Wollen Sie keinen Quellcode auf dem NAS, siehe „Variante ohne Bauen auf dem
+NAS" am Ende.
+
+---
+
+## Schritt 3 — Image bauen
+
+```bash
+cd /mnt/tank/notenverwaltung/quelle
+git pull
+docker build -t notenverwaltung:$(date +%Y-%m-%d) .
+docker images notenverwaltung
+```
+
+**Datum als Tag, nie `latest`.** Der Tag ist gleichzeitig die Rollback-Marke:
+Ein Zurück auf die vorige Version ist eine Zeile in der Compose-Datei und ein
+Neustart des Stacks — solange das alte Image noch da ist. Mit `latest`
+überschreibt sich der Stand selbst und genau das geht nicht mehr.
+
+Bauen Sie mehrmals am selben Tag, hängen Sie eine laufende Nummer an:
+`notenverwaltung:2026-08-11b`.
+
+Im Image ist ausschließlich Code. `.dockerignore` schließt `.env`, `data/` und
+`*.db` aus, und das Dockerfile kopiert ohnehin nur `app`, `migrations`,
+`scripts`, `alembic.ini` und das Startskript. Es enthält keine Daten und kein
+Geheimnis.
+
+---
+
+## Schritt 4 — Stack in Dockge anlegen
+
+In Dockge einen neuen Stack `notenverwaltung` anlegen und folgende
+`compose.yaml` eintragen. Sie unterscheidet sich von der `docker-compose.yml`
+im Repository an genau einer Stelle: `image:` statt `build:`.
+
+```yaml
+services:
+  tailscale:
+    image: tailscale/tailscale:VERSION   # <-- eintragen, siehe unten
+    container_name: notenverwaltung-tailscale
+    hostname: notenverwaltung
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:?TS_AUTHKEY fehlt - bitte in .env eintragen}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_HOSTNAME: notenverwaltung
+    volumes:
+      - tailscale-zustand:/var/lib/tailscale
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    restart: unless-stopped
+
+  notenverwaltung:
+    image: notenverwaltung:2026-08-11    # der Tag aus Schritt 3
+    pull_policy: never                   # nie aus einer Registry ziehen
+    container_name: notenverwaltung
+    # Kein ports-Eintrag und keiner möglich: der Container hängt im Netz des
+    # Sidecars und ist ausschließlich über den Tailnet-Namen erreichbar.
+    network_mode: service:tailscale
+    depends_on:
+      - tailscale
+    volumes:
+      - /mnt/tank/notenverwaltung/daten:/daten
+      - /mnt/tank/notenverwaltung/sicherungen:/sicherungen
+    restart: unless-stopped
+
+volumes:
+  tailscale-zustand:
+```
+
+`pull_policy: never` ist Absicht: Ohne diese Zeile würde Compose bei einem
+vertippten Tag versuchen, ein fremdes Image gleichen Namens aus dem Netz zu
+holen. Mit ihr scheitert der Start stattdessen sichtbar.
+
+`VERSION` beim Tailscale-Image ist ein **Platzhalter** und steht absichtlich
+so da: Der Stack startet damit nicht, bis Sie eine Version eingetragen haben.
+`latest` wäre die schlechtere Wahl — der Sidecar tauscht sich sonst
+irgendwann unbemerkt aus. Sinnvoll ist die Version, die Ihr bestehender
+Tailscale-Container auf dem NAS bereits verwendet:
+
+```bash
+docker ps --filter ancestor=tailscale/tailscale --format '{{.Image}}'
+```
+
+### Die `.env` daneben
+
+Im selben Stack-Verzeichnis eine Datei `.env`:
+
+```
+TS_AUTHKEY=tskey-auth-...
+```
+
+Bietet Dockges Editor keine `.env` an, legen Sie sie per Shell an — das
+Stack-Verzeichnis liegt dort, wo Dockge konfiguriert ist, üblicherweise
+`/opt/stacks/notenverwaltung/`.
+
+Der Schlüssel gehört dem Tailscale-Sidecar, nicht der Anwendung. **Die
+Anwendung hat kein einziges Geheimnis** und liest genau eine
+Umgebungsvariable, den Datenbankpfad, und der steht fest im Image.
+
+Empfehlenswert ist ein **einmalig verwendbarer** Auth-Key aus der
+Tailscale-Konsole. Nach der ersten Anmeldung liegt der Knotenzustand im Volume
+`tailscale-zustand`; der Schlüssel wird dann nicht mehr gebraucht und darf
+ablaufen. Ein dauerhaft gültiger Key, der als Datei auf dem NAS liegt, ist ein
+dauerhaft gültiges Anmeldegeheimnis.
+
+---
+
+## Schritt 5 — Datenbank einmalig anlegen
+
+**Der Container startet ohne vorhandene Datenbank absichtlich nicht.** Vor dem
+ersten Start deshalb einmal:
+
+```bash
+docker run --rm \
+    -v /mnt/tank/notenverwaltung/daten:/daten \
+    --entrypoint alembic \
+    notenverwaltung:2026-08-11 upgrade head
+```
+
+Das läuft ohne Compose und ohne den Tailscale-Sidecar. Danach steht
+`/mnt/tank/notenverwaltung/daten/notenverwaltung.db` bereit.
+
+Prüfen, dass die Datei UID 1000 gehört:
+
+```bash
+ls -l /mnt/tank/notenverwaltung/daten/
+```
+
+---
+
+## Schritt 6 — Starten und erreichen
+
+Stack in Dockge starten. Danach:
+
+1. In der Tailscale-Konsole erscheint ein neuer Knoten `notenverwaltung`.
+   Freigeben, falls Ihr Tailnet Geräte manuell genehmigt.
+2. In den Tailscale-ACLs festlegen, welche Geräte diesen Knoten erreichen
+   dürfen. Das ist der eigentliche Grund für den eigenen Sidecar-Knoten
+   statt der Mitbenutzung des vorhandenen Tailscale-Containers.
+3. Aufrufen: `http://notenverwaltung:8000/` von einem Gerät im Tailnet.
+
+Wenn nichts kommt, zuerst das Protokoll ansehen:
+
+```bash
+docker logs notenverwaltung
+docker logs notenverwaltung-tailscale
+```
+
+---
+
+## Schritt 7 — Sicherung einrichten
+
+Nächtlich um 2 Uhr, als Cron-Eintrag auf dem TrueNAS-Host (Systemeinstellungen
+→ Erweitert → Cron-Jobs, oder `crontab -e` als root):
+
+```
+0 2 * * * docker exec notenverwaltung python scripts/backup.py /sicherungen --aufbewahren 14
+```
+
+`docker exec` mit festem Containernamen statt `docker compose exec`: Der
+Cron-Lauf braucht so kein Arbeitsverzeichnis und keinen Pfad zur
+Compose-Datei. Das Skript gibt bei Fehlschlag einen Rückgabewert ≠ 0 zurück,
+damit Cron es meldet.
+
+Gesichert wird über `VACUUM INTO`, nie über eine Dateikopie, und die Kopie
+wird nach dem Schreiben geöffnet und geprüft. Details in `README.md`.
+
+### Wiederherstellung einmal von Hand durchspielen
+
+Abschnitt 2.5 der Spezifikation verlangt das, und zwar **bevor** echte Daten
+im System sind:
+
+```bash
+# Stack in Dockge stoppen, dann:
+cp /mnt/tank/notenverwaltung/sicherungen/notenverwaltung-JJJJ-MM-TT-HHMMSS.db \
+   /mnt/tank/notenverwaltung/daten/notenverwaltung.db
+chown 1000:1000 /mnt/tank/notenverwaltung/daten/notenverwaltung.db
+# Stack wieder starten
+```
+
+Das `cp` ist hier richtig: Die Sicherung ist eine ruhende Datei und die
+Anwendung ist gestoppt. Verboten ist `cp` nur auf die **laufende** Datenbank.
+
+Achten Sie darauf, dass neben der wiederhergestellten Datei keine alten
+`.db-wal`- und `.db-shm`-Dateien liegenbleiben — die gehören zum vorigen
+Stand. Vor dem `cp` entfernen.
+
+---
+
+## Aktualisieren auf eine neue Version
+
+Die Reihenfolge ist nicht beliebig: **erst sichern, dann migrieren, dann
+starten.**
+
+```bash
+# 1. Neue Quelle holen und bauen
+cd /mnt/tank/notenverwaltung/quelle
+git pull
+docker build -t notenverwaltung:2026-09-01 .
+
+# 2. Stack in Dockge stoppen
+
+# 3. Sicherung ziehen -- mit dem ALTEN Image, gegen die unveränderte Datei
+docker run --rm \
+    -v /mnt/tank/notenverwaltung/daten:/daten \
+    -v /mnt/tank/notenverwaltung/sicherungen:/sicherungen \
+    --entrypoint python \
+    notenverwaltung:2026-08-11 scripts/backup.py /sicherungen
+
+# 4. Migration mit dem NEUEN Image
+docker run --rm \
+    -v /mnt/tank/notenverwaltung/daten:/daten \
+    --entrypoint alembic \
+    notenverwaltung:2026-09-01 upgrade head
+
+# 5. Tag in der compose.yaml auf 2026-09-01 ändern, Stack starten
+```
+
+**Der Container migriert nie von selbst.** Ändert eine neue Version das
+Schema, prüft er das beim Start, startet **nicht** und schreibt den Grund ins
+Protokoll (`docker logs notenverwaltung`). Das ist beabsichtigt: Eine
+automatische Migration würde den produktiven Bestand mit Klarnamen und
+Lichtbildern umbauen, ohne dass jemand sie auf einer Kopie durchgespielt hat.
+
+Bei einer Migration, die mehr als eine Spalte hinzufügt, gehört ein Probelauf
+dazu: die frische Sicherung an einen anderen Ort kopieren,
+`NOTENVERWALTUNG_DB` darauf zeigen lassen, migrieren, ansehen — erst dann
+Schritt 4.
+
+### Zurück auf die vorige Version
+
+Solange die Migration **keine** Schemaänderung enthielt: Tag in der
+`compose.yaml` zurückstellen, Stack neu starten. Fertig.
+
+Enthielt sie eine Schemaänderung, genügt das nicht — das alte Programm kann
+mit dem neuen Schema nichts anfangen und verweigert den Start. Dann die
+Sicherung aus Schritt 3 zurückspielen (siehe „Wiederherstellung") und danach
+den Tag zurückstellen.
+
+Alte Images aufräumen, aber nicht zu früh:
+
+```bash
+docker images notenverwaltung
+docker rmi notenverwaltung:2026-06-01
+```
+
+---
+
+## Störungssuche
+
+| Fehlerbild | Ursache | Abhilfe |
+|---|---|---|
+| `exec format error` | Image für die falsche Architektur, z. B. vom Pi | Auf dem NAS neu bauen |
+| `unable to open database file` | Verzeichnis gehört nicht UID 1000, oder es fehlt | `chown -R 1000:1000 …` |
+| Container startet nicht, Protokoll nennt eine ausstehende Migration | Neues Image, altes Schema | Migration ausführen (siehe „Aktualisieren") |
+| `TS_AUTHKEY fehlt` | `.env` fehlt oder liegt nicht neben der `compose.yaml` | `.env` im Stack-Verzeichnis anlegen |
+| Compose will `notenverwaltung` aus dem Netz ziehen | Tag vertippt, Image nicht vorhanden | `docker images notenverwaltung`, Tag berichtigen |
+| Knoten erscheint nicht im Tailnet | Auth-Key abgelaufen oder verbraucht | Neuen Key erzeugen, `.env` ändern, Stack neu starten |
+| Seite lädt, zeigt aber keine Uhrzeiten | — | Tritt nicht auf; `tzdata` ist im Image fest enthalten |
+
+---
+
+## Variante ohne Bauen auf dem NAS
+
+Wenn kein Quellcode auf das NAS soll, bauen Sie auf einem **x86-64**-Rechner
+(Notebook, VM) und übertragen das fertige Image direkt — ohne Registry, ohne
+Konto, ohne öffentliches Artefakt:
+
+```bash
+docker build -t notenverwaltung:2026-08-11 .
+docker save notenverwaltung:2026-08-11 | ssh root@truenas 'docker load'
+```
+
+Alles ab Schritt 4 bleibt unverändert.
+
+Eine Registry (Docker Hub) brauchen Sie für diesen Aufbau nicht. Falls Sie
+später doch eine wollen: privates Repository, und der Build muss auf x86-64
+laufen — nicht auf dem Pi.
+
+---
+
+## Was hier bewusst nicht passiert
+
+- **Kein automatisches Update, kein Watchtower.** Ein Image, das sich nachts
+  selbst austauscht, kann bei einer Schemaänderung nur zwei Dinge tun:
+  falsch migrieren oder nicht mehr starten.
+- **Keine automatische Migration beim Start.** Siehe oben.
+- **Kein veröffentlichter Port, kein Reverse Proxy, kein TLS.** Der Zugang
+  läuft ausschließlich über das Tailnet; die Begründung dieser bewussten
+  Abweichung von Abschnitt 2, Punkt 7 steht in `README.md`.
+- **Keine Authentifizierung in der Anwendung.** Wer den Knoten erreicht, darf
+  alles. Die Zugangsbeschränkung liegt in den Tailscale-ACLs. Das ist
+  beabsichtigt und keine Lücke — aber es heißt, dass die ACLs die einzige
+  Grenze sind. Behandeln Sie sie entsprechend.
