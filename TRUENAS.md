@@ -23,6 +23,27 @@ in dem mal `admin` und mal `root` gearbeitet hat, ist die Ursache dieses
 Fehlers. Wer lieber als `admin` angemeldet bleibt, stellt **jedem** Befehl
 `sudo` voran — auch den `git`-Befehlen, nicht nur den `docker`-Befehlen.
 
+### Wo läuft welcher Schritt?
+
+**Dockge hat keine Kommandozeile.** Alles, was in dieser Anleitung als
+`bash`-Block steht, gehört in die TrueNAS-Shell. In Dockge passiert nur
+zweierlei: die Compose-Datei eintragen und auf *Deployen* bzw. *Stoppen*
+drücken.
+
+| Schritt | Wo |
+|---|---|
+| 1 Verzeichnisse und Rechte | TrueNAS-Shell |
+| 2 Quelle holen | TrueNAS-Shell |
+| 3 Image bauen | TrueNAS-Shell |
+| 4 Datenbank anlegen | TrueNAS-Shell |
+| 5 Stack eintragen | **Dockge** |
+| 6 Deployen | **Dockge** |
+| 7 Sicherung einrichten | TrueNAS-Shell (Cron) |
+| Migration beim Update | TrueNAS-Shell |
+
+**Die Reihenfolge ist nicht beliebig.** Wird vor Schritt 4 deployt, findet der
+Container keine Datenbank und beendet sich sofort wieder.
+
 ---
 
 ## Warum hier gebaut wird und nicht auf dem Pi
@@ -162,7 +183,37 @@ Sicherungen einlesen und an den Daemon schicken — langsam und unnötig.
 
 ---
 
-## Schritt 4 — Stack in Dockge anlegen
+## Schritt 4 — Datenbank einmalig anlegen (TrueNAS-Shell)
+
+**Vor** dem ersten Deploy in Dockge, nicht danach: Der Container startet ohne
+vorhandene Datenbank absichtlich nicht.
+
+Dieser Befehl läuft in der **TrueNAS-Shell**, nicht in Dockge — Dockge hat
+keine Kommandozeile und kann kein `docker run`:
+
+```bash
+docker run --rm \
+    -v /mnt/Daten-Z1/apps/notenverwaltung/daten:/daten \
+    --entrypoint alembic \
+    notenverwaltung:2026-08-11 upgrade head
+```
+
+Der Tag muss der aus Schritt 3 sein. Der Befehl braucht weder Compose noch den
+Tailscale-Sidecar; er hängt nur das Datenverzeichnis ein und legt die Datei an.
+
+Prüfen — die Datei muss existieren und UID 1000 gehören:
+
+```bash
+ls -l /mnt/Daten-Z1/apps/notenverwaltung/daten/
+```
+
+Erwartet: `notenverwaltung.db`, Eigentümer `1000 1000`. Steht dort `root`,
+lief der Befehl gegen ein anderes Verzeichnis oder Schritt 1 wurde
+übersprungen — dann `chown 1000:1000` nachziehen.
+
+---
+
+## Schritt 5 — Stack in Dockge anlegen
 
 Dockge baut nicht — es startet und stoppt nur, was in Schritt 3 gebaut wurde.
 Die passende Compose-Datei liegt im Repository:
@@ -254,32 +305,9 @@ fällt erst beim Neuanmelden auf.
 
 ---
 
-## Schritt 5 — Datenbank einmalig anlegen
+## Schritt 6 — Deployen und erreichen
 
-**Der Container startet ohne vorhandene Datenbank absichtlich nicht.** Vor dem
-ersten Start deshalb einmal:
-
-```bash
-docker run --rm \
-    -v /mnt/Daten-Z1/apps/notenverwaltung/daten:/daten \
-    --entrypoint alembic \
-    notenverwaltung:2026-08-11 upgrade head
-```
-
-Das läuft ohne Compose und ohne den Tailscale-Sidecar. Danach steht
-`/mnt/Daten-Z1/apps/notenverwaltung/daten/notenverwaltung.db` bereit.
-
-Prüfen, dass die Datei UID 1000 gehört:
-
-```bash
-ls -l /mnt/Daten-Z1/apps/notenverwaltung/daten/
-```
-
----
-
-## Schritt 6 — Starten und erreichen
-
-Stack in Dockge starten. Danach:
+Jetzt erst in Dockge auf **Deployen**. Danach:
 
 1. In der Tailscale-Konsole erscheint ein neuer Knoten `notenverwaltung`.
    Freigeben, falls Ihr Tailnet Geräte manuell genehmigt.
@@ -374,7 +402,7 @@ Lichtbildern umbauen, ohne dass jemand sie auf einer Kopie durchgespielt hat.
 Bei einer Migration, die mehr als eine Spalte hinzufügt, gehört ein Probelauf
 dazu: die frische Sicherung an einen anderen Ort kopieren,
 `NOTENVERWALTUNG_DB` darauf zeigen lassen, migrieren, ansehen — erst dann
-Schritt 4.
+den Migrationsbefehl aus dem Block oben.
 
 ### Zurück auf die vorige Version
 
@@ -383,7 +411,7 @@ Solange die Migration **keine** Schemaänderung enthielt: Tag in der
 
 Enthielt sie eine Schemaänderung, genügt das nicht — das alte Programm kann
 mit dem neuen Schema nichts anfangen und verweigert den Start. Dann die
-Sicherung aus Schritt 3 zurückspielen (siehe „Wiederherstellung") und danach
+vorher gezogene Sicherung zurückspielen (siehe „Wiederherstellung") und danach
 den Tag zurückstellen.
 
 Alte Images aufräumen, aber nicht zu früh:
@@ -440,12 +468,67 @@ Die vier häufigsten Ursachen, in dieser Reihenfolge:
 3. **Das Image gibt es lokal nicht** unter genau diesem Tag. Prüfen mit
    `docker images notenverwaltung`; der Tag muss zeichengenau stimmen.
 4. **`pull_policy` wird nicht verstanden** — nur bei alten Compose-Versionen.
-   Zeile entfernen, siehe Schritt 4.
+   Zeile entfernen, siehe Schritt 5.
 
 Verzeichnisse, die es noch nicht gibt, sind **keine** Ursache: Docker legt
 einen fehlenden Bind-Mount-Pfad selbst an — allerdings als root, und dann
 kann die Anwendung nicht hineinschreiben. Deshalb Schritt 1 vor dem ersten
 Start, nicht danach.
+
+### `cannot join network namespace of container … is restarting`
+
+```
+Error response from daemon: cannot join network namespace of container:
+Container 5073a0… is restarting, wait until the container is running
+ ✓ Container notenverwaltung-tailscale   Started
+ ⠿ Container notenverwaltung             Starting
+```
+
+Diese Meldung ist eine **Folge, nicht die Ursache**. Die Anwendung hängt per
+`network_mode: service:tailscale` im Netz des Sidecars. Läuft der Sidecar
+nicht, gibt es kein Netz zum Beitreten. Dass Dockge daneben `Started` anzeigt,
+täuscht: Der Container wurde gestartet, beendet sich sofort wieder und wird
+von `restart: unless-stopped` erneut gestartet — eine Schleife.
+
+**Reparieren lässt sich nur der Sidecar.** Der entscheidende Befehl ist sein
+Protokoll:
+
+```bash
+docker logs notenverwaltung-tailscale --tail 50
+docker ps -a --filter name=notenverwaltung
+```
+
+Was dort typischerweise steht, und was es bedeutet:
+
+| Im Protokoll | Ursache | Abhilfe |
+|---|---|---|
+| `invalid key`, `unauthorized`, `key expired` | Auth-Key abgelaufen, schon verbraucht oder falsch kopiert | Neuen Key erzeugen, `.env` ändern, neu deployen |
+| `wgengine`, `tun`, `/dev/net/tun` | Das TUN-Gerät fehlt auf dem Host | `ls -l /dev/net/tun` — fehlt es, `modprobe tun` und den Stack neu deployen |
+| `permission denied` auf `/var/lib/tailscale` | Zustandsverzeichnis gehört nicht root | `chown -R root:root …/tailscale` |
+| gar nichts, Container endet sofort | Image-Tag zeigt auf etwas anderes als erwartet | `docker inspect notenverwaltung-tailscale --format '{{.Config.Image}}'` |
+
+Solange der Sidecar nicht dauerhaft läuft, ist die zweite Meldung ohne
+Aussagekraft. Erst wenn `docker ps` ihn als `Up` zeigt, lohnt der Blick auf
+`docker logs notenverwaltung`.
+
+Zum Aufräumen zwischen zwei Versuchen — in der TrueNAS-Shell:
+
+```bash
+cd /opt/stacks/notenverwaltung
+docker compose down
+docker compose up -d
+```
+
+### Die Anwendung startet nicht, das Protokoll nennt eine fehlende Datenbank
+
+```bash
+docker logs notenverwaltung --tail 20
+```
+
+Sagt es `Die Datenbank … gibt es nicht`, wurde **Schritt 4 übersprungen**. Das
+ist kein Fehler des Stacks: Der Container legt die Datenbank absichtlich nicht
+selbst an. Schritt 4 in der TrueNAS-Shell nachholen und in Dockge neu
+deployen.
 
 ### `detected dubious ownership in repository`
 
