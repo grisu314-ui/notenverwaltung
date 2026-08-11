@@ -5,12 +5,23 @@ laufenden Stack in Dockge. Sie ergänzt den Abschnitt „Betrieb im Container"
 in `README.md` um das, was auf TrueNAS anders ist.
 
 Vorausgesetzt: TrueNAS SCALE mit Docker (ab 24.10 „Electric Eel"), Dockge als
-App, Shell-Zugang als `root`. Prüfen:
+App, Shell-Zugang.
+
+**Alle Befehle dieser Anleitung laufen als `root`.** Am einfachsten einmal zu
+Beginn umschalten und in derselben Sitzung bleiben:
 
 ```bash
+sudo -i
 docker version
 docker compose version
 ```
+
+Der Grund ist nicht Bequemlichkeit: `docker` braucht ohnehin root, und `git`
+verweigert die Arbeit, sobald Arbeitsbaum und aufrufender Benutzer nicht
+zusammenpassen (siehe „Störungssuche", *dubious ownership*). Ein Verzeichnis,
+in dem mal `admin` und mal `root` gearbeitet hat, ist die Ursache dieses
+Fehlers. Wer lieber als `admin` angemeldet bleibt, stellt **jedem** Befehl
+`sudo` voran — auch den `git`-Befehlen, nicht nur den `docker`-Befehlen.
 
 ---
 
@@ -342,12 +353,60 @@ docker rmi notenverwaltung:2026-06-01
 |---|---|---|
 | `exec format error` | Image für die falsche Architektur, z. B. vom Pi | Auf dem NAS neu bauen |
 | `destination path … already exists and is not an empty directory` | `git clone` in das Dataset, in dem `daten/` und `sicherungen/` liegen | `git init` + `git fetch` statt `clone`, siehe Schritt 2 |
+| `fatal: detected dubious ownership in repository` | Der Arbeitsbaum gehört einem anderen Benutzer als dem, der `git` aufruft | Als `root` weiterarbeiten (`sudo -i`) oder jedem `git` ein `sudo` voranstellen — siehe unten |
 | `unable to open database file` | Verzeichnis gehört nicht UID 1000, oder es fehlt | `chown -R 1000:1000 …` |
 | Container startet nicht, Protokoll nennt eine ausstehende Migration | Neues Image, altes Schema | Migration ausführen (siehe „Aktualisieren") |
 | `TS_AUTHKEY fehlt` | `.env` fehlt oder liegt nicht neben der `compose.yaml` | `.env` im Stack-Verzeichnis anlegen |
 | Compose will `notenverwaltung` aus dem Netz ziehen | Tag vertippt, Image nicht vorhanden | `docker images notenverwaltung`, Tag berichtigen |
 | Knoten erscheint nicht im Tailnet | Auth-Key abgelaufen oder verbraucht | Neuen Key erzeugen, `.env` ändern, Stack neu starten |
 | Seite lädt, zeigt aber keine Uhrzeiten | — | Tritt nicht auf; `tzdata` ist im Image fest enthalten |
+
+### `detected dubious ownership in repository`
+
+Git arbeitet nicht in einem Arbeitsbaum, der einem anderen Benutzer gehört als
+dem, der es aufruft. Der typische Auslöser hier: Schritt 1 (`mkdir`, `chown`)
+lief als `root`, danach wurde als `admin` weitergearbeitet.
+
+Nachgemessen mit git 2.43, damit die Empfehlung nicht auf Vermutung beruht:
+
+| Arbeitsbaum gehört | git läuft als | Ergebnis |
+|---|---|---|
+| `root` | `root` | geht |
+| `root` | `admin` | **Fehler** |
+| `admin` | `admin` | geht |
+| `admin` | `root` (Anmeldung als root) | **Fehler** |
+| `root` oder `admin` | `sudo git …`, aufgerufen von `admin` | geht |
+
+Die letzte Zeile ist der Ausweg: `sudo` setzt `SUDO_UID`, und git akzeptiert
+dann sowohl den aufrufenden Benutzer als auch `root` als Eigentümer.
+
+**Empfehlung:** einmal `sudo -i` und den ganzen Ablauf als `root` machen.
+
+**Was Sie nicht tun sollten:**
+
+- `git config --global --add safe.directory …` — der Vorschlag aus Gits
+  Fehlermeldung. Er schaltet die Prüfung ab, statt die Ursache zu beheben,
+  und er gilt **pro Benutzer**: Als `admin` eingetragen, hilft er beim
+  nächsten `sudo git pull` nicht, weil `root` seine eigene Konfiguration
+  liest. Nachgemessen.
+- `chown -R admin /mnt/Daten-Z1/apps/notenverwaltung` — **das zerstört die
+  Rechte auf `daten/` und `sicherungen/`.** Beide müssen UID 1000 gehören,
+  sonst startet der Container zwar, kann aber nicht schreiben. Wenn schon
+  umschreiben, dann ohne `-R` auf dem Elternverzeichnis und mit `-R` nur auf
+  `.git` — und danach `chown -R 1000:1000` auf die beiden Datenverzeichnisse
+  zur Kontrolle wiederholen.
+
+Ist es schon passiert, richtet das den Stand wieder her:
+
+```bash
+sudo -i
+cd /mnt/Daten-Z1/apps/notenverwaltung
+chown -R root:root .git
+chown root:root .
+chown -R 1000:1000 daten sicherungen
+ls -ld . .git daten sicherungen
+git status --short
+```
 
 ---
 
