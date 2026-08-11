@@ -5,12 +5,23 @@ laufenden Stack in Dockge. Sie ergänzt den Abschnitt „Betrieb im Container"
 in `README.md` um das, was auf TrueNAS anders ist.
 
 Vorausgesetzt: TrueNAS SCALE mit Docker (ab 24.10 „Electric Eel"), Dockge als
-App, Shell-Zugang als `root`. Prüfen:
+App, Shell-Zugang.
+
+**Alle Befehle dieser Anleitung laufen als `root`.** Am einfachsten einmal zu
+Beginn umschalten und in derselben Sitzung bleiben:
 
 ```bash
+sudo -i
 docker version
 docker compose version
 ```
+
+Der Grund ist nicht Bequemlichkeit: `docker` braucht ohnehin root, und `git`
+verweigert die Arbeit, sobald Arbeitsbaum und aufrufender Benutzer nicht
+zusammenpassen (siehe „Störungssuche", *dubious ownership*). Ein Verzeichnis,
+in dem mal `admin` und mal `root` gearbeitet hat, ist die Ursache dieses
+Fehlers. Wer lieber als `admin` angemeldet bleibt, stellt **jedem** Befehl
+`sudo` voran — auch den `git`-Befehlen, nicht nur den `docker`-Befehlen.
 
 ---
 
@@ -39,19 +50,35 @@ startet und stoppt den Stack, mehr nicht.
 
 ## Schritt 1 — Datasets und Rechte
 
-Zwei getrennte Verzeichnisse, damit die Sicherungen auf ein Dataset mit
-eigener Snapshot-Aufbewahrung zeigen können:
+Drei Verzeichnisse. Der Stack verwendet **keine benannten Docker-Volumes**,
+sondern ausschließlich absolute Pfade auf dem NAS — damit liegt jeder Zustand
+an einer Stelle, die man sehen, sichern und in einen Snapshot nehmen kann.
 
 ```bash
 mkdir -p /mnt/Daten-Z1/apps/notenverwaltung/daten
 mkdir -p /mnt/Daten-Z1/apps/notenverwaltung/sicherungen
+mkdir -p /mnt/Daten-Z1/apps/notenverwaltung/tailscale
+
 chown -R 1000:1000 /mnt/Daten-Z1/apps/notenverwaltung/daten \
                    /mnt/Daten-Z1/apps/notenverwaltung/sicherungen
+chown -R root:root /mnt/Daten-Z1/apps/notenverwaltung/tailscale
+chmod 700          /mnt/Daten-Z1/apps/notenverwaltung/tailscale
 ```
 
-Die Anwendung läuft als UID/GID 1000, nicht als root. Gehört das Verzeichnis
+| Verzeichnis | Inhalt | Eigentümer |
+|---|---|---|
+| `daten/` | die SQLite-Datei | **1000:1000** |
+| `sicherungen/` | die Sicherungskopien | **1000:1000** |
+| `tailscale/` | Knotenzustand des Sidecars | **root:root**, Modus 700 |
+
+Die **Anwendung** läuft als UID/GID 1000, nicht als root. Gehört `daten/`
 einem anderen Benutzer, startet der Container zwar, kann aber nicht schreiben;
 das Fehlerbild ist `unable to open database file`.
+
+Der **Tailscale-Sidecar** läuft dagegen als root — er braucht `NET_ADMIN`.
+Sein Verzeichnis deshalb nicht auf 1000 setzen. In ihm liegt der
+Knotenschlüssel: Bleibt es erhalten, wird der Auth-Key nur beim allerersten
+Start gebraucht. `chmod 700`, weil das ein Anmeldegeheimnis ist.
 
 > Die SQLite-Datei gehört auf ein **lokales** Dataset, nie auf eine SMB- oder
 > NFS-Freigabe (Spezifikation 2, Punkt 2). Netzwerkdateisysteme setzen die
@@ -137,10 +164,11 @@ Sicherungen einlesen und an den Daemon schicken — langsam und unnötig.
 
 ## Schritt 4 — Stack in Dockge anlegen
 
-Die fertige Compose-Datei liegt im Repository: **`docker-compose.truenas.yml`**.
-Sie unterscheidet sich von `docker-compose.yml` nur darin, dass sie ein
-fertiges Image verwendet statt zu bauen. Die Pfade unter `volumes` stimmen
-bereits.
+Dockge baut nicht — es startet und stoppt nur, was in Schritt 3 gebaut wurde.
+Die passende Compose-Datei liegt im Repository:
+**`docker-compose.truenas.yml`**. Sie unterscheidet sich von
+`docker-compose.yml` in zwei Punkten: fertiges Image statt `build:`, und alle
+Volumes als absolute Pfade auf dem NAS statt eines benannten Docker-Volumes.
 
 In Dockge einen neuen Stack `notenverwaltung` anlegen und den Inhalt in den
 Editor kopieren:
@@ -165,11 +193,35 @@ Compose-Datei bindet im Zweifel das falsche Verzeichnis ein.
    docker ps --filter ancestor=tailscale/tailscale --format '{{.Image}}'
    ```
 
-2. `notenverwaltung:JJJJ-MM-TT` — der Tag aus Schritt 3.
+2. `notenverwaltung:JJJJ-MM-TT` — der Tag aus Schritt 3. Genau so, wie
+   `docker images notenverwaltung` ihn anzeigt.
+
+### Die Volumes
+
+Alle drei sind **absolute Pfade auf dem NAS**, kein benanntes Volume, kein
+`volumes:`-Block am Dateiende:
+
+```yaml
+      - /mnt/Daten-Z1/apps/notenverwaltung/tailscale:/var/lib/tailscale
+      - /mnt/Daten-Z1/apps/notenverwaltung/daten:/daten
+      - /mnt/Daten-Z1/apps/notenverwaltung/sicherungen:/sicherungen
+```
+
+Links der Pfad auf dem NAS, rechts der Pfad im Container — die rechte Seite
+ist fest und darf nicht geändert werden: `/daten` steht so im Image
+(`NOTENVERWALTUNG_DB=/daten/notenverwaltung.db`), `/var/lib/tailscale` steht
+in `TS_STATE_DIR`.
+
+Ein benanntes Volume für den Tailscale-Zustand täte es technisch auch, läge
+dann aber unter `/var/lib/docker/volumes/…` — unsichtbar, außerhalb Ihrer
+Snapshots und beim Aufräumen leicht mit weggeworfen. Ein absoluter Pfad ist
+hier die bessere Wahl, und Dockge kommt damit ohnehin am besten zurecht.
 
 `pull_policy: never` bleibt stehen. Ohne diese Zeile würde Compose bei einem
 vertippten Tag versuchen, ein fremdes Image gleichen Namens aus dem Netz zu
-holen; mit ihr scheitert der Start stattdessen sichtbar.
+holen; mit ihr scheitert der Start stattdessen sichtbar. Meldet Ihre
+Compose-Version die Zeile als unbekannt, kann sie ersatzlos entfallen — ein
+lokal vorhandenes Image wird auch ohne sie nicht neu geholt.
 
 ### Die `.env` daneben
 
@@ -188,10 +240,17 @@ Anwendung hat kein einziges Geheimnis** und liest genau eine
 Umgebungsvariable, den Datenbankpfad, und der steht fest im Image.
 
 Empfehlenswert ist ein **einmalig verwendbarer** Auth-Key aus der
-Tailscale-Konsole. Nach der ersten Anmeldung liegt der Knotenzustand im Volume
-`tailscale-zustand`; der Schlüssel wird dann nicht mehr gebraucht und darf
-ablaufen. Ein dauerhaft gültiger Key, der als Datei auf dem NAS liegt, ist ein
-dauerhaft gültiges Anmeldegeheimnis.
+Tailscale-Konsole. Nach der ersten Anmeldung liegt der Knotenzustand in
+`/mnt/Daten-Z1/apps/notenverwaltung/tailscale`; der Schlüssel wird dann nicht
+mehr gebraucht und darf ablaufen. Ein dauerhaft gültiger Key, der als Datei
+auf dem NAS liegt, ist ein dauerhaft gültiges Anmeldegeheimnis.
+
+Solange die `compose.yaml` `${TS_AUTHKEY:?…}` enthält, muss die Variable
+allerdings bei **jedem** Start gesetzt sein, auch wenn Tailscale sie längst
+nicht mehr braucht. Die `.env` bleibt also liegen. Wer das nicht will, ändert
+den Eintrag nach der ersten erfolgreichen Anmeldung auf `${TS_AUTHKEY:-}` —
+dann startet der Stack auch ohne Schlüssel, und ein verlorener Knotenzustand
+fällt erst beim Neuanmelden auf.
 
 ---
 
@@ -342,12 +401,98 @@ docker rmi notenverwaltung:2026-06-01
 |---|---|---|
 | `exec format error` | Image für die falsche Architektur, z. B. vom Pi | Auf dem NAS neu bauen |
 | `destination path … already exists and is not an empty directory` | `git clone` in das Dataset, in dem `daten/` und `sicherungen/` liegen | `git init` + `git fetch` statt `clone`, siehe Schritt 2 |
+| `fatal: detected dubious ownership in repository` | Der Arbeitsbaum gehört einem anderen Benutzer als dem, der `git` aufruft | Als `root` weiterarbeiten (`sudo -i`) oder jedem `git` ein `sudo` voranstellen — siehe unten |
 | `unable to open database file` | Verzeichnis gehört nicht UID 1000, oder es fehlt | `chown -R 1000:1000 …` |
 | Container startet nicht, Protokoll nennt eine ausstehende Migration | Neues Image, altes Schema | Migration ausführen (siehe „Aktualisieren") |
 | `TS_AUTHKEY fehlt` | `.env` fehlt oder liegt nicht neben der `compose.yaml` | `.env` im Stack-Verzeichnis anlegen |
 | Compose will `notenverwaltung` aus dem Netz ziehen | Tag vertippt, Image nicht vorhanden | `docker images notenverwaltung`, Tag berichtigen |
 | Knoten erscheint nicht im Tailnet | Auth-Key abgelaufen oder verbraucht | Neuen Key erzeugen, `.env` ändern, Stack neu starten |
+| Knoten meldet sich bei **jedem** Neustart neu an | `tailscale/` wird nicht eingehängt oder gehört UID 1000 statt root | Pfad in der Compose-Datei prüfen, `chown -R root:root tailscale` |
+| Stack startet in Dockge nicht, ohne brauchbare Meldung | verschiedene | In der Shell nachstellen, siehe unten |
 | Seite lädt, zeigt aber keine Uhrzeiten | — | Tritt nicht auf; `tzdata` ist im Image fest enthalten |
+
+### Der Stack startet in Dockge nicht
+
+Dockges Oberfläche zeigt nicht immer die eigentliche Fehlermeldung. Der erste
+Schritt ist deshalb immer, denselben Stack in der Shell zu starten — dort
+steht im Klartext, woran es liegt:
+
+```bash
+cd /opt/stacks/notenverwaltung      # Pfad, den Dockge für Stacks verwendet
+docker compose config               # prüft die Datei, ohne etwas zu starten
+docker compose up -d
+docker compose logs --tail 50
+```
+
+`docker compose config` ist die schnellste Prüfung: Es löst `${TS_AUTHKEY}`
+auf, meldet unbekannte Schlüssel und druckt die Datei so, wie Compose sie
+tatsächlich versteht. Läuft der Stack von der Shell aus, aber nicht aus
+Dockge heraus, liegt es an Dockge und nicht an dieser Compose-Datei.
+
+Die vier häufigsten Ursachen, in dieser Reihenfolge:
+
+1. **Ein Platzhalter steht noch drin** — `VERSION` oder `JJJJ-MM-TT`. Der
+   Stack startet dann absichtlich nicht.
+2. **`TS_AUTHKEY` kommt nicht an.** Symptom: `required variable TS_AUTHKEY is
+   missing`. Die `.env` muss im selben Verzeichnis liegen wie die
+   `compose.yaml` des Stacks, nicht im Projektverzeichnis. Prüfen mit
+   `docker compose config | grep TS_AUTHKEY`.
+3. **Das Image gibt es lokal nicht** unter genau diesem Tag. Prüfen mit
+   `docker images notenverwaltung`; der Tag muss zeichengenau stimmen.
+4. **`pull_policy` wird nicht verstanden** — nur bei alten Compose-Versionen.
+   Zeile entfernen, siehe Schritt 4.
+
+Verzeichnisse, die es noch nicht gibt, sind **keine** Ursache: Docker legt
+einen fehlenden Bind-Mount-Pfad selbst an — allerdings als root, und dann
+kann die Anwendung nicht hineinschreiben. Deshalb Schritt 1 vor dem ersten
+Start, nicht danach.
+
+### `detected dubious ownership in repository`
+
+Git arbeitet nicht in einem Arbeitsbaum, der einem anderen Benutzer gehört als
+dem, der es aufruft. Der typische Auslöser hier: Schritt 1 (`mkdir`, `chown`)
+lief als `root`, danach wurde als `admin` weitergearbeitet.
+
+Nachgemessen mit git 2.43, damit die Empfehlung nicht auf Vermutung beruht:
+
+| Arbeitsbaum gehört | git läuft als | Ergebnis |
+|---|---|---|
+| `root` | `root` | geht |
+| `root` | `admin` | **Fehler** |
+| `admin` | `admin` | geht |
+| `admin` | `root` (Anmeldung als root) | **Fehler** |
+| `root` oder `admin` | `sudo git …`, aufgerufen von `admin` | geht |
+
+Die letzte Zeile ist der Ausweg: `sudo` setzt `SUDO_UID`, und git akzeptiert
+dann sowohl den aufrufenden Benutzer als auch `root` als Eigentümer.
+
+**Empfehlung:** einmal `sudo -i` und den ganzen Ablauf als `root` machen.
+
+**Was Sie nicht tun sollten:**
+
+- `git config --global --add safe.directory …` — der Vorschlag aus Gits
+  Fehlermeldung. Er schaltet die Prüfung ab, statt die Ursache zu beheben,
+  und er gilt **pro Benutzer**: Als `admin` eingetragen, hilft er beim
+  nächsten `sudo git pull` nicht, weil `root` seine eigene Konfiguration
+  liest. Nachgemessen.
+- `chown -R admin /mnt/Daten-Z1/apps/notenverwaltung` — **das zerstört die
+  Rechte auf `daten/` und `sicherungen/`.** Beide müssen UID 1000 gehören,
+  sonst startet der Container zwar, kann aber nicht schreiben. Wenn schon
+  umschreiben, dann ohne `-R` auf dem Elternverzeichnis und mit `-R` nur auf
+  `.git` — und danach `chown -R 1000:1000` auf die beiden Datenverzeichnisse
+  zur Kontrolle wiederholen.
+
+Ist es schon passiert, richtet das den Stand wieder her:
+
+```bash
+sudo -i
+cd /mnt/Daten-Z1/apps/notenverwaltung
+chown -R root:root .git
+chown root:root .
+chown -R 1000:1000 daten sicherungen
+ls -ld . .git daten sicherungen
+git status --short
+```
 
 ---
 

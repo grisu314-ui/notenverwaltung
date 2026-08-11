@@ -1,12 +1,14 @@
 # Variante für TrueNAS SCALE mit Dockge. Anleitung: TRUENAS.md
 #
-# Unterschied zur docker-compose.yml: kein Build-Schritt. Dockge führt
-# `docker compose` in seinem eigenen Container aus, ein Build-Kontext müsste
-# dort unter identischem Pfad sichtbar sein. Gebaut wird deshalb in der Shell
-# (TRUENAS.md, Schritt 3), hier läuft nur noch das fertige Image.
+# Unterschied zur docker-compose.yml: kein Build-Schritt. Gebaut wird vorher
+# in der Shell (TRUENAS.md, Schritt 3), hier läuft nur noch das fertige
+# Image. Dockge startet und stoppt den Stack, mehr nicht.
 #
-# Der Inhalt dieser Datei gehört in den Dockge-Editor. Vor dem ersten Start
-# sind genau zwei Werte einzutragen:
+# Alle drei Volumes sind absolute Pfade auf dem NAS -- keine benannten
+# Docker-Volumes. Damit liegt jeder Zustand des Stacks an einer Stelle, die
+# man sehen, sichern und in einen Snapshot nehmen kann.
+#
+# Vor dem ersten Start sind genau zwei Werte einzutragen:
 #   1. VERSION beim Tailscale-Image
 #   2. der Tag des gebauten Images bei `notenverwaltung:`
 # Dazu die Datei .env im Stack-Verzeichnis mit TS_AUTHKEY.
@@ -26,7 +28,10 @@ services:
       TS_STATE_DIR: /var/lib/tailscale
       TS_HOSTNAME: notenverwaltung
     volumes:
-      - tailscale-zustand:/var/lib/tailscale
+      # Der Knotenzustand. Bleibt er erhalten, wird der Auth-Key nur beim
+      # allerersten Start gebraucht. Dieses Verzeichnis gehört root, NICHT
+      # 1000: tailscaled läuft im Container als root.
+      - /mnt/Daten-Z1/apps/notenverwaltung/tailscale:/var/lib/tailscale
       - /dev/net/tun:/dev/net/tun
     cap_add:
       - NET_ADMIN
@@ -38,7 +43,9 @@ services:
     # die Rollback-Marke.
     image: notenverwaltung:JJJJ-MM-TT
     # Ohne diese Zeile würde Compose bei einem vertippten Tag versuchen, ein
-    # fremdes Image gleichen Namens aus dem Netz zu holen.
+    # fremdes Image gleichen Namens aus dem Netz zu holen. Meldet Ihre
+    # Compose-Version die Zeile als unbekannt, kann sie ersatzlos weg --
+    # ein lokal vorhandenes Image wird auch ohne sie nicht neu geholt.
     pull_policy: never
     container_name: notenverwaltung
     # Kein ports-Eintrag und keiner möglich: der Container hängt im Netz des
@@ -48,11 +55,8 @@ services:
       - tailscale
     volumes:
       # Lokales Dataset, niemals eine SMB- oder NFS-Freigabe
-      # (Spezifikation 2, Punkt 2).
+      # (Spezifikation 2, Punkt 2). Gehört UID/GID 1000.
       - /mnt/Daten-Z1/apps/notenverwaltung/daten:/daten
       # Getrenntes Ziel, damit es auf ein Snapshot-Dataset zeigen kann.
       - /mnt/Daten-Z1/apps/notenverwaltung/sicherungen:/sicherungen
     restart: unless-stopped
-
-volumes:
-  tailscale-zustand:
