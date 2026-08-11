@@ -61,13 +61,46 @@ das Fehlerbild ist `unable to open database file`.
 
 ## Schritt 2 — Quelle auf das NAS
 
+Der Quellbaum kommt in das Dataset `/mnt/Daten-Z1/apps/notenverwaltung`, also
+**eine Ebene über** `daten/` und `sicherungen/`.
+
+`git clone` verweigert das: Das Zielverzeichnis ist nicht leer, weil die
+beiden Unterverzeichnisse aus Schritt 1 bereits darin liegen. Der Weg für ein
+vorhandenes Verzeichnis ist deshalb:
+
 ```bash
-git clone https://github.com/grisu314-ui/notenverwaltung.git \
-    /mnt/Daten-Z1/apps/notenverwaltung/quelle
+cd /mnt/Daten-Z1/apps/notenverwaltung
+git init
+git remote add origin https://github.com/grisu314-ui/notenverwaltung.git
+git fetch origin
+git checkout -b main origin/main
 ```
 
-Das Verzeichnis wird nur zum Bauen gebraucht. Es enthält keine Daten und darf
-auf einem Dataset ohne Snapshots liegen.
+Später aktualisieren mit `git pull` wie gewohnt.
+
+> **Vorsicht mit `git clean -xfd` in diesem Verzeichnis.** Der Schalter `-x`
+> löscht auch die ignorierten Dateien — und ignoriert sind hier ausgerechnet
+> `daten/` und `sicherungen/`. Ein `git clean -xfd` in diesem Arbeitsbaum
+> löscht damit die produktive Datenbank **und sämtliche Sicherungen** in einem
+> Zug. `git clean -fd` ohne `-x` ist ungefährlich, `git reset --hard` ebenso;
+> beide fassen ignorierte Dateien nicht an.
+>
+> Wer diesen Schalter nie tippt, hat kein Problem. Wer sichergehen will, legt
+> den Quellbaum stattdessen in ein Unterverzeichnis `quelle/` — dann liegen
+> Daten und Arbeitsbaum getrennt und dieser Absatz entfällt.
+
+`daten/` und `sicherungen/` stehen in `.gitignore` und in `.dockerignore`.
+Damit taucht der produktive Bestand weder in `git status` auf noch im
+Build-Kontext, den `docker build` an den Daemon schickt. Einmal nachsehen —
+jetzt, solange dort noch keine echten Daten liegen:
+
+```bash
+git status --short      # daten/ und sicherungen/ dürfen NICHT auftauchen
+git clean -nd           # muss leer bleiben
+```
+
+Zeigt die erste Zeile `?? daten/`, greift die Ignorierung nicht und Sie
+arbeiten mit einem Stand vor dieser Änderung. Dann erst `git pull`.
 
 Wollen Sie keinen Quellcode auf dem NAS, siehe „Variante ohne Bauen auf dem
 NAS" am Ende.
@@ -77,7 +110,7 @@ NAS" am Ende.
 ## Schritt 3 — Image bauen
 
 ```bash
-cd /mnt/Daten-Z1/apps/notenverwaltung/quelle
+cd /mnt/Daten-Z1/apps/notenverwaltung
 git pull
 docker build -t notenverwaltung:$(date +%Y-%m-%d) .
 docker images notenverwaltung
@@ -91,10 +124,14 @@ Neustart des Stacks — solange das alte Image noch da ist. Mit `latest`
 Bauen Sie mehrmals am selben Tag, hängen Sie eine laufende Nummer an:
 `notenverwaltung:2026-08-11b`.
 
-Im Image ist ausschließlich Code. `.dockerignore` schließt `.env`, `data/` und
-`*.db` aus, und das Dockerfile kopiert ohnehin nur `app`, `migrations`,
-`scripts`, `alembic.ini` und das Startskript. Es enthält keine Daten und kein
-Geheimnis.
+Im Image ist ausschließlich Code. `.dockerignore` schließt `.env`, `daten/`,
+`sicherungen/` und `*.db` aus, und das Dockerfile kopiert ohnehin nur `app`,
+`migrations`, `scripts`, `alembic.ini` und das Startskript. Es enthält keine
+Daten und kein Geheimnis.
+
+Der Build-Kontext ist hier das ganze Dataset. Ohne die beiden Einträge in
+`.dockerignore` würde `docker build` die produktive Datenbank und sämtliche
+Sicherungen einlesen und an den Daemon schicken — langsam und unnötig.
 
 ---
 
@@ -109,7 +146,7 @@ In Dockge einen neuen Stack `notenverwaltung` anlegen und den Inhalt in den
 Editor kopieren:
 
 ```bash
-cat /mnt/Daten-Z1/apps/notenverwaltung/quelle/docker-compose.truenas.yml
+cat /mnt/Daten-Z1/apps/notenverwaltung/docker-compose.truenas.yml
 ```
 
 Die Datei steht bewusst **nur einmal** im Projekt, statt hier noch einmal
@@ -247,7 +284,7 @@ starten.**
 
 ```bash
 # 1. Neue Quelle holen und bauen
-cd /mnt/Daten-Z1/apps/notenverwaltung/quelle
+cd /mnt/Daten-Z1/apps/notenverwaltung
 git pull
 docker build -t notenverwaltung:2026-09-01 .
 
@@ -304,6 +341,7 @@ docker rmi notenverwaltung:2026-06-01
 | Fehlerbild | Ursache | Abhilfe |
 |---|---|---|
 | `exec format error` | Image für die falsche Architektur, z. B. vom Pi | Auf dem NAS neu bauen |
+| `destination path … already exists and is not an empty directory` | `git clone` in das Dataset, in dem `daten/` und `sicherungen/` liegen | `git init` + `git fetch` statt `clone`, siehe Schritt 2 |
 | `unable to open database file` | Verzeichnis gehört nicht UID 1000, oder es fehlt | `chown -R 1000:1000 …` |
 | Container startet nicht, Protokoll nennt eine ausstehende Migration | Neues Image, altes Schema | Migration ausführen (siehe „Aktualisieren") |
 | `TS_AUTHKEY fehlt` | `.env` fehlt oder liegt nicht neben der `compose.yaml` | `.env` im Stack-Verzeichnis anlegen |
