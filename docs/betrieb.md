@@ -73,8 +73,7 @@ und `sicherungen/`, und die nächste Version soll von dort aus gebaut werden
 können, ohne dass jemand erst den Zweig zurückstellen muss.
 
 ```bash
-sudo git clone https://github.com/grisu314-ui/notenverwaltung.git \
-    /mnt/Daten-Z1/apps/notenverwaltung-dev
+sudo git clone https://github.com/grisu314-ui/notenverwaltung.git /mnt/Daten-Z1/apps/notenverwaltung-dev
 cd /mnt/Daten-Z1/apps/notenverwaltung-dev
 sudo git checkout ZU-TESTENDER-ZWEIG
 
@@ -84,6 +83,13 @@ sudo chown -R 1000:1000 daten sicherungen
 
 docker build -t notenverwaltung:TEST-TAG .
 ```
+
+**Ohne das Zielverzeichnis am Ende legt `git clone` ein eigenes Unterverzeichnis
+nach dem Repository-Namen an** (`notenverwaltung/` statt der aktuellen
+Arbeitsverzeichnisses) — passiert leicht, wenn eine mehrzeilige Eingabe beim
+Einfügen abreißt. Kein Schaden, nur ein `cd notenverwaltung` zusätzlich; die
+Pfade zu `daten/`, `sicherungen/` und `tailscale/` ändern sich dadurch nicht,
+sie hängen nicht vom Quellbaum ab.
 
 Damit sieht der Testbaum genauso aus wie der produktive: Quellbaum in der
 Wurzel, `daten/`, `sicherungen/` und `tailscale/` darunter. Das dritte
