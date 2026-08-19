@@ -1,0 +1,51 @@
+{# One seat. What a tap does depends on the mode -- in the view mode it opens
+   the pupil, in the edit modes it selects the seat, in the swap mode it is
+   the target of the swap. Every variant carries a plain link or form as well,
+   so the plan works without JavaScript. #}
+{% set adresse = "/klassen/" ~ klasse.id ~ "/sitzplan" %}
+{% if modus == "ansicht" %}
+  {% if platz.schueler %}
+    <a class="platz belegt" href="/schueler/{{ platz.schueler.id }}">
+      {% with s = platz.schueler %}{% include "_sitzbild.html" %}{% endwith %}
+    </a>
+  {% else %}
+    <span class="platz leer" aria-label="Reihe {{ platz.reihe }}, Platz {{ platz.position }} frei"></span>
+  {% endif %}
+
+{% elif modus == "tauschen" %}
+  {% if auswahl and auswahl.reihe == platz.reihe and auswahl.position == platz.position %}
+    <span class="platz quelle">
+      {% if platz.schueler %}{% with s = platz.schueler %}{% include "_sitzbild.html" %}{% endwith %}{% endif %}
+      <span class="platzhinweis">wird getauscht</span>
+    </span>
+  {% else %}
+    <form method="post" action="{{ adresse }}/tauschen"
+          hx-post="{{ adresse }}/tauschen"
+          hx-target="#sitzplan" hx-swap="outerHTML">
+      <input type="hidden" name="von_reihe" value="{{ auswahl.reihe }}">
+      <input type="hidden" name="von_position" value="{{ auswahl.position }}">
+      <input type="hidden" name="nach_reihe" value="{{ platz.reihe }}">
+      <input type="hidden" name="nach_position" value="{{ platz.position }}">
+      <button type="submit" class="platz {{ 'belegt' if platz.schueler else 'leer' }}">
+        {% if platz.schueler %}
+          {% with s = platz.schueler %}{% include "_sitzbild.html" %}{% endwith %}
+        {% else %}
+          <span class="platzhinweis">hierhin</span>
+        {% endif %}
+      </button>
+    </form>
+  {% endif %}
+
+{% else %}
+  {% set ziel = "menu" if platz.schueler else "zuweisen" %}
+  <a class="platz {{ 'belegt' if platz.schueler else 'leer' }}{% if auswahl and auswahl.reihe == platz.reihe and auswahl.position == platz.position %} gewaehlt{% endif %}"
+     href="{{ adresse }}?modus={{ ziel }}&amp;reihe={{ platz.reihe }}&amp;position={{ platz.position }}"
+     hx-get="{{ adresse }}/raster?modus={{ ziel }}&amp;reihe={{ platz.reihe }}&amp;position={{ platz.position }}"
+     hx-target="#sitzplan" hx-swap="outerHTML">
+    {% if platz.schueler %}
+      {% with s = platz.schueler %}{% include "_sitzbild.html" %}{% endwith %}
+    {% else %}
+      <span class="platzhinweis">frei</span>
+    {% endif %}
+  </a>
+{% endif %}

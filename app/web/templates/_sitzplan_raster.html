@@ -1,0 +1,103 @@
+{# Grid and panel in one fragment, swapped as a whole. After a change the
+   seats, the photos and the list of pupils without a seat all move at once;
+   splitting that into pieces would let them disagree.
+
+   The confirmation is rendered by the server, never by the browser: what you
+   read is the state that was stored (specification 10). #}
+{% set adresse = "/klassen/" ~ klasse.id ~ "/sitzplan" %}
+<div id="sitzplan" class="sitzplan" data-modus="{{ modus }}">
+
+  <p class="sitzzustand" data-zustand="{{ 'gespeichert' if gerade_gespeichert else 'ruhe' }}"
+     role="status">
+    {% if gerade_gespeichert %}gespeichert{% endif %}
+  </p>
+
+  <p class="tafel">Tafel</p>
+
+  <ol class="sitzreihen">
+    {% for reihe in blatt.reihen %}
+      <li>
+        <ol class="sitzreihe">
+          {% for platz in reihe.plaetze %}
+            <li>{% include "_sitzplatz.html" %}</li>
+          {% endfor %}
+        </ol>
+      </li>
+    {% endfor %}
+  </ol>
+
+  {% if modus == "zuweisen" %}
+    <div class="sitzauswahl">
+      <h2>Reihe {{ auswahl.reihe }}, Platz {{ auswahl.position }}</h2>
+      {% if blatt.ohne_platz %}
+        <ul class="sitzliste">
+          {% for s in blatt.ohne_platz %}
+            <li>
+              <form method="post" action="{{ adresse }}/platz/{{ auswahl.reihe }}/{{ auswahl.position }}"
+                    hx-post="{{ adresse }}/platz/{{ auswahl.reihe }}/{{ auswahl.position }}"
+                    hx-target="#sitzplan" hx-swap="outerHTML">
+                <input type="hidden" name="schueler_id" value="{{ s.id }}">
+                <button type="submit" class="sitzwahl">{% include "_sitzbild.html" %}</button>
+              </form>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="hinweis">Alle aktiven Schüler dieser Klasse haben einen Platz.</p>
+      {% endif %}
+      <a class="abbrechen" href="{{ adresse }}?modus=bearbeiten"
+         hx-get="{{ adresse }}/raster?modus=bearbeiten"
+         hx-target="#sitzplan" hx-swap="outerHTML">Abbrechen</a>
+    </div>
+
+  {% elif modus == "menu" %}
+    <div class="sitzauswahl">
+      <h2>Reihe {{ auswahl.reihe }}, Platz {{ auswahl.position }}</h2>
+      {% if auswahl.schueler %}
+        <p>{{ auswahl.schueler.vorname | anzeigename(auswahl.schueler.nachname, einstellungen.namensanzeige) }}</p>
+        <div class="sitzaktionen">
+          <form method="post" action="{{ adresse }}/platz/{{ auswahl.reihe }}/{{ auswahl.position }}/raeumen"
+                hx-post="{{ adresse }}/platz/{{ auswahl.reihe }}/{{ auswahl.position }}/raeumen"
+                hx-target="#sitzplan" hx-swap="outerHTML">
+            <button type="submit">Platz räumen</button>
+          </form>
+          <a class="schaltflaeche" href="{{ adresse }}?modus=tauschen&amp;reihe={{ auswahl.reihe }}&amp;position={{ auswahl.position }}"
+             hx-get="{{ adresse }}/raster?modus=tauschen&amp;reihe={{ auswahl.reihe }}&amp;position={{ auswahl.position }}"
+             hx-target="#sitzplan" hx-swap="outerHTML">Tauschen</a>
+          <a class="schaltflaeche" href="/schueler/{{ auswahl.schueler.id }}">Schülerblatt</a>
+        </div>
+      {% else %}
+        <p class="hinweis">Dieser Platz ist frei.</p>
+      {% endif %}
+      <a class="abbrechen" href="{{ adresse }}?modus=bearbeiten"
+         hx-get="{{ adresse }}/raster?modus=bearbeiten"
+         hx-target="#sitzplan" hx-swap="outerHTML">Abbrechen</a>
+    </div>
+
+  {% elif modus == "tauschen" %}
+    <div class="sitzauswahl">
+      <h2>Tauschen</h2>
+      <p class="hinweis">Zielplatz antippen. Ist er frei, wird umgesetzt.</p>
+      <a class="abbrechen" href="{{ adresse }}?modus=bearbeiten"
+         hx-get="{{ adresse }}/raster?modus=bearbeiten"
+         hx-target="#sitzplan" hx-swap="outerHTML">Abbrechen</a>
+    </div>
+  {% endif %}
+
+  {% if blatt.ohne_platz and modus != "zuweisen" %}
+    <div class="ohneplatz">
+      <h2>Noch nicht zugewiesen ({{ blatt.anzahl_ohne_platz }})</h2>
+      <ul class="kachelliste">
+        {% for s in blatt.ohne_platz %}
+          <li>
+            {% if modus == "ansicht" %}
+              <a class="kachel schuelerkachel" href="/schueler/{{ s.id }}">{% include "_sitzbild.html" %}</a>
+            {% else %}
+              <span class="kachel schuelerkachel">{% include "_sitzbild.html" %}</span>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+</div>
