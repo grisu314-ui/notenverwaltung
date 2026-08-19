@@ -92,6 +92,27 @@ MELDUNGEN: dict[tuple[str, str], str] = {
     (ART_CHECK, "ck_note_historie_neuer_status_gueltig"): (
         "Unbekannter Status in der Änderungshistorie."
     ),
+    (ART_UNIQUE, "sitzplan.klasse_id"): (
+        "Für diese Klasse gibt es bereits einen Sitzplan."
+    ),
+    (ART_UNIQUE, "sitzplatz.sitzplan_id, sitzplatz.reihe, sitzplatz.position"): (
+        "Auf diesem Platz sitzt bereits ein Schüler."
+    ),
+    (ART_UNIQUE, "sitzplatz.sitzplan_id, sitzplatz.schueler_id"): (
+        "Dieser Schüler sitzt im Sitzplan bereits auf einem anderen Platz."
+    ),
+    (ART_CHECK, "ck_sitzplan_reihen_gueltig"): (
+        "Ein Sitzplan hat 1 bis 12 Reihen."
+    ),
+    (ART_CHECK, "ck_sitzplan_sitze_je_reihe_gueltig"): (
+        "Eine Reihe hat 1 bis 12 Sitze."
+    ),
+    (ART_CHECK, "ck_sitzplatz_reihe_gueltig"): (
+        "Die Reihe eines Sitzplatzes beginnt bei 1."
+    ),
+    (ART_CHECK, "ck_sitzplatz_position_gueltig"): (
+        "Die Position eines Sitzplatzes beginnt bei 1."
+    ),
 }
 
 ALLGEMEINE_MELDUNG = (

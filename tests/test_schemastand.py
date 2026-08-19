@@ -32,4 +32,5 @@ def test_ein_alter_stand_wird_erkannt(db_url):
 
 
 def test_der_erwartete_stand_kommt_aus_den_migrationen():
-    assert erwarteter_stand() == "0001"
+    """Pinned on purpose: a new migration has to be noticed here as well."""
+    assert erwarteter_stand() == "0002"
