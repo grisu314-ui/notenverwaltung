@@ -269,7 +269,7 @@ Er zeigt die **aktiven** Schüler der Klasse. Es gibt keinen Kursbezug und keine
 
 Der Plan ist ein **Raster aus Reihen und Sitzen je Reihe**. Beide Zahlen sind unabhängig voneinander einstellbar, jeweils **1 bis 12**; die Vorgabe ist **5 Reihen zu je 6 Sitzen**. Die obere Schranke schützt vor Vertippern, sie ist keine Aussage über einen Raum.
 
-- Die **Tafel liegt immer oben** und ist als solche beschriftet. Es gibt keine Drehung und keine Umschaltung der Blickrichtung: Ein Plan ohne feststehende Blickrichtung wird im Unterricht falsch gelesen.
+- Die **Tafel liegt am Bildschirm oben, im Ausdruck unten**, und ist als solche beschriftet. Es gibt keine Drehung und keine Umschaltung der Blickrichtung: Ein Plan ohne feststehende Blickrichtung wird im Unterricht falsch gelesen. Der Ausdruck wird von vorn gelesen, mit dem Rücken zur Tafel; die Reihen laufen dort von der Tafel weg auf den Leser zu.
 - Jeder Platz ist über Reihe und Position eindeutig bezeichnet.
 - **Gänge und Lücken entstehen durch leere Plätze**, nicht durch eine eigene Raumgeometrie. Frei auf einer Fläche platzierbare Tische gibt es nicht (Begründung unter „Bedienung").
 - Das **Verkleinern des Rasters wird abgewiesen**, solange dabei ein besetzter Platz wegfiele. Die Meldung nennt die betroffenen Schüler. Ein stillschweigendes Räumen findet nicht statt.
