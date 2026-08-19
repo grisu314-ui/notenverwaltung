@@ -8,6 +8,22 @@ Maßgeblich ist das Dokument `notenverwaltung-spezifikation.md` im Projektwurzel
 
 Ziel ist nicht „eine möglichst gute Anwendung", sondern **genau die spezifizierte Anwendung**, korrekt und wartbar durch eine Einzelperson.
 
+Die Anwendung ist **produktiv**. Sie enthält Klarnamen und Lichtbilder realer Schülerinnen und Schüler, und sie wird täglich benutzt. Es gibt keinen Testbetrieb mit unwichtigen Daten.
+
+### Wo was steht
+
+Lesereihenfolge zu Beginn einer Sitzung, wenn du das Projekt nicht kennst: `docs/uebergabe.md`, dann das Dokument zum anstehenden Thema.
+
+| Datei | Inhalt |
+|---|---|
+| `docs/uebergabe.md` | Überblick, Zuständigkeiten, was du selbst nicht kannst |
+| `docs/notenlogik.md` | die fachlichen Regeln der Notenberechnung |
+| `docs/entwicklung.md` | Code-Landkarte, Migrationen, Konventionen, bewusste Auslassungen |
+| `docs/betrieb.md` | Sicherung, Wiederherstellung, Update, Löschfunktion |
+| `docs/inbetriebnahme-truenas.md` | Neuaufbau des Containers von Grund auf |
+
+**Die Tabelle „Bewusste Auslassungen" in `docs/entwicklung.md` liest du, bevor du etwas ergänzt, das dir zu fehlen scheint.** Sie führt genau die Dinge auf, die ein Assistent erfahrungsgemäß ungefragt nachrüstet.
+
 ---
 
 ## Festgelegter Stack (nicht zur Diskussion)

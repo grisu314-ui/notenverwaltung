@@ -1,9 +1,15 @@
-# Variante MIT Build-Schritt: für die Entwicklung und den Raspberry Pi als
-# Teststand.
+# Variante MIT Build-Schritt: baut und startet in einem Zug.
 #
-# Für TrueNAS SCALE mit Dockge gibt es docker-compose.truenas.yml -- dort
-# wird nicht gebaut, sondern ein in der Shell erzeugtes Image verwendet.
-# Anleitung: docs/inbetriebnahme-truenas.md
+#   docker compose build && docker compose up -d
+#
+# Zum Erzeugen des produktiven Images wird diese Datei NICHT gebraucht:
+# `docker build -t notenverwaltung:TAG .` liest allein das Dockerfile. Der
+# Weg auf dem NAS ist genau der -- gebaut wird in der Shell, gefahren wird
+# der Stack aus docker-compose.truenas.yml, in dem `image:` statt `build:`
+# steht. Anleitung: docs/inbetriebnahme-truenas.md
+#
+# Diese Datei bleibt als bequemer Ein-Befehl-Weg für einen zweiten Rechner
+# oder einen Teststand.
 #
 # Aufbau: ein eigener Tailscale-Container, die Anwendung teilt sich dessen
 # Netz-Namespace. Die Anwendung veröffentlicht damit KEINEN eigenen Port und
@@ -15,12 +21,12 @@
 # Knoten festlegen, welche Geräte ihn erreichen dürfen.
 #
 # Vor dem ersten Start anzupassen:
-#   - die beiden Pfade unter volumes. Eingetragen sind die des NAS; auf dem
-#     Pi zeigen sie woanders hin.
+#   - die beiden Pfade unter volumes. Eingetragen sind die des NAS; auf einem
+#     anderen Rechner zeigen sie woanders hin.
 #   - TS_AUTHKEY in einer .env-Datei neben dieser Datei (gehört nicht ins
 #     Repository; .gitignore deckt sie ab)
-#   - das Tailscale-Image auf die Version festnageln, die Ihr bestehender
-#     Container verwendet
+#   - das Tailscale-Image festnageln, sobald der Stack einmal lief:
+#       docker exec notenverwaltung-tailscale tailscale version | head -1
 
 services:
   tailscale:

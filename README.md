@@ -10,8 +10,12 @@ Klarnamen und Lichtbilder realer Schülerinnen und Schüler.
 
 ## Wenn Sie das Projekt übernehmen
 
-**→ [`docs/uebergabe.md`](docs/uebergabe.md)** — Zugänge, wo die Daten liegen,
-erste Schritte, laufende Pflichten.
+**→ [`docs/uebergabe.md`](docs/uebergabe.md)** — wer was tun kann, wo die Daten
+liegen, erste Schritte, laufende Pflichten.
+
+Die Weiterentwicklung führt ein KI-Assistent aus, angeleitet vom Betreiber.
+Dessen Arbeitsvorgaben stehen in **[`CLAUDE.md`](CLAUDE.md)** und haben
+Vorrang vor allem außer der Spezifikation.
 
 ## Wegweiser
 
@@ -23,9 +27,7 @@ erste Schritte, laufende Pflichten.
 | am Code arbeiten | [`docs/entwicklung.md`](docs/entwicklung.md) |
 | die Anwendung neu aufsetzen | [`docs/inbetriebnahme-truenas.md`](docs/inbetriebnahme-truenas.md) |
 | wissen, was sie leisten soll | [`notenverwaltung-spezifikation.md`](notenverwaltung-spezifikation.md) |
-
-`CLAUDE.md` enthält die Arbeitsvorgaben. Es ist für einen KI-Assistenten
-geschrieben, aber die kürzeste Beschreibung der Projektdisziplin.
+| wissen, was hier gilt | [`CLAUDE.md`](CLAUDE.md) |
 
 ## Was sie kann
 
