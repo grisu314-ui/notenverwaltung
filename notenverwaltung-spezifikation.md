@@ -1,9 +1,10 @@
 # Notenverwaltung – Projektspezifikation
 
-**Version:** 1.1 · **Stand:** 19.08.2026
-**Zweck:** Beschreibt, *was* gebaut wurde, nicht *wie*. Version 1.1 ist auf den
-umgesetzten Stand nachgeführt; die Abweichungen gegenüber Version 1.0 stehen
-gesammelt am Ende.
+**Version:** 1.2 · **Stand:** 19.08.2026
+**Zweck:** Beschreibt, *was* gebaut wurde, nicht *wie*. Version 1.1 war auf den
+umgesetzten Stand nachgeführt; Version 1.2 ergänzt mit dem Sitzplan (5.6) einen
+Abschnitt, der **noch nicht umgesetzt** ist und als solcher gekennzeichnet ist.
+Die Änderungslisten stehen gesammelt am Ende.
 **Auftraggeber/Betreiber/Alleinnutzer:** eine Lehrkraft an einer berufsbildenden Schule (Rheinland-Pfalz).
 
 ---
@@ -243,6 +244,75 @@ Die Nummerierung folgt Version 1.0. T-5, T-6 und T-10 prüften Punkteeingabe und
 
 Schuljahre, Halbjahre, Klassen, Kurse, Notengruppen mit Gewichten, Kursteilnahmen.
 
+### 5.6 Sitzplan
+
+> **Noch nicht umgesetzt.** Dieser Abschnitt kam mit Fassung 1.2 hinzu und
+> beschreibt einen Soll-Stand. Der übrige Teil des Dokuments beschreibt den
+> gebauten Stand.
+
+Zweck: Die Lehrkraft sieht während des Unterrichts, **wer wo sitzt** — mit Foto und Namen, in derselben Darstellung wie die Klassenansicht (5.1). Ein Sitzplan ist eine *Ansicht auf Schüler*. Er trägt keine Note ein, verändert keine und zeigt keine.
+
+**Bezugsobjekt ist die Klasse.** Ein Sitzplan gehört zu genau einer Klasse und zeigt deren **aktive** Schüler. Es gibt keinen Kursbezug und keinen Kursfilter: Wird eine Klasse in einem Kurs unterrichtet, den nur ein Teil ihrer Schüler besucht (3.1, Kursteilnahme), zeigt der Plan trotzdem alle. Er bildet den Raum ab, nicht die Teilnehmerliste.
+
+#### Mehrere Pläne je Klasse
+
+Eine Klasse kann mehrere Sitzpläne haben, jeder mit einer eigenen Bezeichnung — etwa „Raum 214" und „Klausurordnung". Verschiedene Räume haben verschiedene Sitzordnungen, und eine Klausurordnung soll nicht vor und nach jeder Klausur von Hand wiederhergestellt werden müssen.
+
+Hat eine Klasse genau einen Plan — der Regelfall —, führt der Einstieg aus der Klassenansicht unmittelbar in diesen Plan. Hat sie mehrere, führt er auf eine Auswahlliste. Es gibt **kein** Standardkennzeichen und keine Merkfunktion für den zuletzt geöffneten Plan.
+
+#### Der Raum
+
+Der Plan ist ein **Raster aus Reihen und Sitzen je Reihe**. Beide Zahlen sind je Plan und unabhängig voneinander einstellbar; die Vorgabe beim Anlegen ist **5 Reihen zu je 6 Sitzen**.
+
+- Die **Tafel liegt immer oben** und ist als solche beschriftet. Es gibt keine Drehung und keine Umschaltung der Blickrichtung: Ein Plan ohne feststehende Blickrichtung wird im Unterricht falsch gelesen.
+- Jeder Platz ist über Reihe und Position eindeutig bezeichnet.
+- **Gänge und Lücken entstehen durch leere Plätze**, nicht durch eine eigene Raumgeometrie. Frei auf einer Fläche platzierbare Tische gibt es nicht (Begründung unter „Bedienung").
+- Das **Verkleinern des Rasters wird abgewiesen**, solange dabei ein besetzter Platz wegfiele. Die Meldung nennt die betroffenen Schüler. Ein stillschweigendes Räumen findet nicht statt.
+
+#### Belegung
+
+- Ein Platz trägt **höchstens einen** Schüler. Ein Doppeltisch sind zwei Plätze nebeneinander, nicht ein Platz mit zwei Personen.
+- Ein Schüler sitzt in einem Plan auf **höchstens einem** Platz. In verschiedenen Plänen derselben Klasse sitzt er unabhängig davon.
+- **Leere Plätze sind der Normalfall**, kein Fehler.
+- Schüler ohne Platz stehen in einer Liste unterhalb des Plans, überschrieben mit ihrer Anzahl. Diese Liste ist sichtbar, sobald sie nicht leer ist. Damit kann ein neu angelegter Schüler nicht übersehen werden, und der Plan erweckt nie den Eindruck, vollständig zu sein, während jemand fehlt.
+
+#### Bedienung
+
+Maßstab ist das Telefon, einhändig im Stehen gehalten (10). Daraus folgt:
+
+- Der Plan ist beim Öffnen **nur lesend**. Ein Tipper auf einen Schüler öffnet dessen Schüleransicht (5.2), genau wie eine Kachel in der Klassenansicht.
+- Ein Schalter **„Plätze bearbeiten"** schaltet das Zuweisen ein. Erst dann verändert ein Tipper die Sitzordnung. Ohne diese Trennung setzt eine Fehlberührung während des Unterrichts jemanden um.
+- Zuweisen geschieht in **zwei Tippern, ohne Ziehen**: freien Platz antippen, dann aus der erscheinenden Liste der noch nicht zugewiesenen Schüler — mit Foto und Namen, in großen Zeilen — einen antippen.
+- Ein besetzter Platz bietet **„Platz räumen"** und **„Tauschen"** an; beim Tauschen wird anschließend der zweite Platz angetippt.
+- **Ziehen und Fallenlassen gibt es nicht.** Es ist einhändig im Stehen nicht zuverlässig bedienbar. Diese Entscheidung, nicht die Bequemlichkeit der Umsetzung, bestimmt auch die Rasterform des Raums.
+- Jede Zuweisung wird **sichtbar bestätigt, erst nach der Antwort des Servers** — dieselbe Regel wie bei der Noteneingabe (10).
+
+#### Drucken
+
+Der Plan lässt sich als eine Seite drucken: das Raster **mit Fotos und Namen**, ohne Bedienelemente. Ohne Fotos hätte der Ausdruck für den Zweck zu wenig Wert; der Betreiber hat entschieden, dass die Ausdrucke seinen Besitz nicht verlassen.
+
+Einen Export in ein Dateiformat gibt es nicht — kein PDF, kein XLSX. Der Ausdruck **enthält Klarnamen und Lichtbilder** und liegt damit, wie jeder Export (8), außerhalb der Reichweite der Löschfunktion (11).
+
+#### Lebensdauer
+
+Ein Sitzplan hängt an der Klasse und damit an deren Schuljahr (3.1). Er bleibt innerhalb des Schuljahres bestehen und wird mit der Klasse oder dem Schuljahr gelöscht. Es gibt **keinen Übertrag** in ein Folgejahr und **keine Kopierfunktion** zwischen Plänen: Ein neues Schuljahr bedeutet eine neue Klasse und meist einen anderen Raum.
+
+#### Schüler, die inaktiv werden oder gelöscht werden
+
+| Vorgang | Wirkung auf den Sitzplan |
+|---|---|
+| Schüler auf **inaktiv** gesetzt (3.1) | Die Zuweisung bleibt erhalten, der Platz wird als **frei angezeigt**. Wird der Schüler wieder aktiv, sitzt er wieder auf seinem Platz. Wird der Platz zwischenzeitlich neu vergeben, ersetzt die neue Zuweisung die alte. |
+| Schüler **endgültig gelöscht** (11) | Die Zuweisung wird mitgelöscht, der Platz wird frei. Die vorgeschaltete Zählung des Umfangs weist die betroffenen Sitzplatzzuweisungen mit aus. |
+
+Das Deaktivieren ist in dieser Anwendung durchgängig die *umkehrbare* Alternative zum Löschen; die Sitzordnung verhält sich genauso. Ein Räumen des Platzes beim Deaktivieren wäre ein Datenverlust an einer Stelle, an der niemand mit dem Sitzplan rechnet.
+
+#### Ausdrücklich nicht Bestandteil
+
+- **Keine Anwesenheiten, keine Fehlzeiten.** Das ist und bleibt ein Nicht-Ziel (1). Ein Sitzplan lädt dazu ein; er ist dafür nicht der Einstieg.
+- **Keine Noteneingabe und keine Notenanzeige im Plan.** Der Weg zur Note führt über die Serieneingabe (5.4).
+- Keine frei platzierbaren Tische, kein Zoom, kein Ziehen.
+- Kein Übertrag zwischen Schuljahren, kein Duplizieren eines Plans.
+
 ---
 
 ## 6. Sortierung und Namensanzeige
@@ -324,6 +394,21 @@ Daraus folgt konkret:
 - Es dürfen keine Daten die Anwendung verlassen außer durch den ausdrücklich ausgelösten Export.
 
 Die Klärung der Genehmigung liegt beim Auftraggeber und ist keine Aufgabe des Entwicklungsprojekts.
+
+---
+
+## Änderungen gegenüber Version 1.1
+
+Version 1.1 beschrieb den gebauten Stand. Version 1.2 nimmt eine Funktion auf,
+die in keiner früheren Fassung stand und noch nicht gebaut ist:
+
+| Abschnitt | Änderung | Grund |
+|---|---|---|
+| 5.6 | **Sitzplan neu aufgenommen** — je Klasse ein oder mehrere benannte Raster aus Reihen und Sitzen, Vorgabe 5 × 6, mit Foto und Namen wie in der Klassenansicht | Wunsch des Betreibers: im Unterricht sehen, wer wo sitzt. Der Abschnitt beschreibt den Soll-Stand und ist als noch nicht umgesetzt gekennzeichnet |
+| 5.6 | Bezugsobjekt ist die **Klasse**, nicht der Kurs; kein Kursfilter | Entscheidung des Betreibers. Der Plan bildet den Raum ab, nicht die Teilnehmerliste |
+| 5.6 | Zuweisung in zwei Tippern, **kein Ziehen**; getrennter Bearbeitungsmodus | Maßstab ist das einhändig gehaltene Telefon (10). Ziehen ist so nicht bedienbar und bestimmt damit auch die Rasterform des Raums |
+| 5.6 | Drucken **mit Fotos**, kein Dateiexport | Entscheidung des Betreibers; ohne Fotos hat der Ausdruck für den Zweck zu wenig Wert. Der Ausdruck liegt außerhalb der Reichweite der Löschfunktion (11) |
+| 5.6 | Anwesenheiten und Noteneingabe im Plan ausdrücklich ausgeschlossen | Anwesenheiten sind ein Nicht-Ziel (1); ein Sitzplan lädt dazu ein, sie doch mitzuerfassen |
 
 ---
 
