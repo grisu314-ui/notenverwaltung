@@ -231,7 +231,10 @@ class Kursteilnahme(Base):
 class Notengruppe(Base):
     """Weights are defined per course and term (3.1).
 
-    They need not add up to 100; the grading module normalises them (4.4).
+    They need not add up to 100 and are never normalised: the calculation is
+    single-stage (4.4), so a weight acts as a factor and only the ratios
+    between the groups matter. A group without a counted grade drops out of
+    numerator and denominator by itself.
 
     The database cannot express that ``halbjahr`` must belong to the same
     school year as ``kurs.klasse.schuljahr`` without redundant columns and a
