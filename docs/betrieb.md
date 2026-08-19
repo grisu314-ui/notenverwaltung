@@ -1,0 +1,196 @@
+# Betrieb
+
+Alle Befehle laufen als `root` auf dem TrueNAS (`sudo -i`). Dockge startet und
+stoppt nur den Stack; eine Kommandozeile hat es nicht.
+
+Neuaufbau von Grund auf: `inbetriebnahme-truenas.md`.
+
+## Sicherung
+
+Läuft nächtlich per Cron:
+
+```
+0 2 * * * docker exec notenverwaltung python scripts/backup.py /sicherungen --aufbewahren 14
+```
+
+Von Hand anstoßen:
+
+```bash
+docker exec notenverwaltung python scripts/backup.py /sicherungen --aufbewahren 14
+```
+
+Das Skript verwendet **`VACUUM INTO`**, nie eine Dateikopie, öffnet die Quelle
+schreibgeschützt und liest die fertige Kopie zur Prüfung noch einmal. Bei
+einem Fehlschlag ist der Rückgabewert ungleich 0, damit Cron es meldet.
+
+> **Warum kein `cp`:** Bei einer Datenbank im WAL-Modus liegen die jüngsten
+> Änderungen in der `-wal`-Datei. Eine Kopie nur der `.db` verliert sie — im
+> Test kam dabei eine Datei heraus, in der eine Sekunden zuvor geschriebene
+> Tabelle vollständig fehlte. Nachgestellt in `tests/test_backup.py`.
+
+Ergebnis sind Dateien `notenverwaltung-JJJJ-MM-TT-HHMMSS.db` in
+`/mnt/Daten-Z1/apps/notenverwaltung/sicherungen`. Ältere als die letzten 14
+werden entfernt.
+
+Gelegentlich nachsehen, dass dort frische Dateien liegen. Eine Sicherung, die
+seit Wochen nicht mehr läuft, merkt sonst niemand.
+
+## Wiederherstellung
+
+**Einmal durchgespielt haben, bevor man sie braucht.** Wer das nicht selbst
+gemacht hat, hat keine Sicherung.
+
+```bash
+# 1. Stack in Dockge stoppen
+# 2. Reste des alten Standes wegräumen -- sie gehören nicht zur Sicherung
+rm -f /mnt/Daten-Z1/apps/notenverwaltung/daten/notenverwaltung.db-wal \
+      /mnt/Daten-Z1/apps/notenverwaltung/daten/notenverwaltung.db-shm
+
+# 3. Sicherung an ihren Platz kopieren
+cp /mnt/Daten-Z1/apps/notenverwaltung/sicherungen/notenverwaltung-JJJJ-MM-TT-HHMMSS.db \
+   /mnt/Daten-Z1/apps/notenverwaltung/daten/notenverwaltung.db
+chown 1000:1000 /mnt/Daten-Z1/apps/notenverwaltung/daten/notenverwaltung.db
+
+# 4. Stack starten
+```
+
+Das `cp` ist hier richtig: Die Sicherung ist eine ruhende Datei und die
+Anwendung ist gestoppt. Verboten ist `cp` nur auf die **laufende** Datenbank.
+
+Schritt 2 nicht überspringen. Bleiben `-wal` und `-shm` des alten Standes
+liegen, mischt SQLite sie in die wiederhergestellte Datei.
+
+## Neue Version einspielen
+
+**Die Reihenfolge ist nicht beliebig: erst sichern, dann migrieren, dann
+starten.**
+
+```bash
+cd /mnt/Daten-Z1/apps/notenverwaltung
+git pull
+docker build -t notenverwaltung:$(date +%Y-%m-%d) .
+
+# Stack in Dockge stoppen
+
+# Sicherung mit dem ALTEN Image, gegen die unveränderte Datei
+docker run --rm \
+    -v /mnt/Daten-Z1/apps/notenverwaltung/daten:/daten \
+    -v /mnt/Daten-Z1/apps/notenverwaltung/sicherungen:/sicherungen \
+    --entrypoint python \
+    notenverwaltung:ALTER-TAG scripts/backup.py /sicherungen
+
+# Migration mit dem NEUEN Image
+docker run --rm \
+    -v /mnt/Daten-Z1/apps/notenverwaltung/daten:/daten \
+    --entrypoint alembic \
+    notenverwaltung:NEUER-TAG upgrade head
+
+# Tag in der compose.yaml in Dockge ändern, Stack starten
+```
+
+**Der Container migriert nie von selbst.** Passt das Schema nicht zum
+Programm, startet er nicht und schreibt den Grund ins Protokoll
+(`docker logs notenverwaltung`). Das ist beabsichtigt: Eine automatische
+Migration würde den produktiven Bestand mit Klarnamen und Lichtbildern
+umbauen, ohne dass jemand sie auf einer Kopie durchgespielt hat.
+
+Bei einer Migration, die mehr als eine Spalte hinzufügt, gehört ein Probelauf
+dazu: die frische Sicherung an einen anderen Ort kopieren,
+`NOTENVERWALTUNG_DB` darauf zeigen lassen, migrieren, ansehen.
+
+### Zurück auf die vorige Version
+
+Ohne Schemaänderung: Tag in der `compose.yaml` zurückstellen, Stack neu
+starten. Fertig — deshalb wird mit Datums-Tags gebaut und nicht mit `latest`.
+
+Mit Schemaänderung genügt das nicht: Das alte Programm verweigert den Start
+gegen das neue Schema. Dann erst die Sicherung zurückspielen, dann den Tag
+zurückstellen.
+
+Alte Images aufräumen, aber nicht zu früh:
+
+```bash
+docker images notenverwaltung
+docker rmi notenverwaltung:ALTER-TAG
+```
+
+## Endgültiges Löschen
+
+Über `/verwaltung` lassen sich ein **Schüler** oder ein **Schuljahr**
+vollständig entfernen — die Pflicht aus Abschnitt 11 der Spezifikation.
+
+Zwei Schritte: Eine Bestätigungsseite zählt auf, was verschwindet (Noten,
+Fotos, Historieneinträge, Kursteilnahmen, Festsetzungen), und erst eine zweite
+Anfrage mit dem eingetippten Namen löscht. Der Vergleich ist tolerant gegen
+fehlende Umlautpunkte — geprüft wird die Absicht, nicht die Tippgenauigkeit.
+
+Ins Protokoll gehen nur ID und Anzahlen, **nie der Name**.
+
+**Die Daten verlassen wirklich die Datei.** `DELETE` gibt in SQLite nur Seiten
+frei; danach laufen `VACUUM` **und** `PRAGMA wal_checkpoint(TRUNCATE)`. Beides
+ist nötig: `VACUUM` allein schreibt die neue Datei im WAL-Modus *durch* die
+`-wal`-Datei, in der der alte Inhalt bis zum Checkpoint lesbar bleibt.
+Gemessen, nicht angenommen — `tests/test_loeschen.py` legt ein Foto mit
+erkennbarer Bytefolge an und sucht danach in den Rohdateien.
+
+**Was das Löschen nicht erreicht: die Sicherungen.** Ein gelöschter Schüler
+steht im Stand von gestern Nacht weiterhin drin und verschwindet dort erst,
+wenn die 14 aufbewahrten Stände durchgelaufen sind. Die Bestätigungsseite sagt
+das. Wer sofortige Löschung braucht, muss die Sicherungsdateien von Hand
+entfernen.
+
+Schlägt das Verdichten fehl — realistischer Fall: das Sicherungsskript läuft
+gerade —, sind die Zeilen gelöscht, die Bytes aber nicht. Dann steht das so in
+der Rückmeldung; nachholen lässt es sich mit `VACUUM;` und
+`PRAGMA wal_checkpoint(TRUNCATE);` in `sqlite3` bei gestoppter Anwendung.
+
+## Export
+
+Über `/verwaltung` zwei Downloads, beide über den **gesamten** Datenbestand:
+XLSX mit einem Blatt je Kurs, und Markdown. Der Export entsteht im
+Arbeitsspeicher, wird direkt ausgeliefert und nirgends abgelegt.
+
+**Er enthält Klarnamen.**
+
+## Speicherbestätigung — Abnahmetest von Hand
+
+Das stille Verwerfen einer Note bei Verbindungsabbruch ist der gravierendste
+denkbare Fehler dieser Anwendung. Die Eingabemaske zeigt „gespeichert" mit
+Uhrzeit erst, wenn der Server nach erfolgreichem Schreiben geantwortet hat,
+und rendert die Bestätigung aus dem gespeicherten Datensatz, nicht aus der
+Anfrage.
+
+**Automatisierte Tests können den entscheidenden Fall nicht prüfen** — was der
+Browser bei abgerissener Verbindung anzeigt. Dafür dieser Durchlauf, **nach
+jeder Änderung an der Eingabemaske zu wiederholen**:
+
+1. Eingabemaske einer Leistung auf dem Handy öffnen, eine Note auswählen.
+   → Die Zeile zeigt „gespeichert" mit Uhrzeit.
+2. **Flugmodus einschalten**, bei einem anderen Schüler eine Note auswählen.
+   → Die Zeile wird rot: „NICHT gespeichert – keine Verbindung".
+3. Seite zu verlassen versuchen.
+   → Der Browser fragt nach.
+4. Flugmodus aus, Seite neu laden.
+   → Die erste Note steht da, die zweite nicht — und das war vorher sichtbar.
+
+Ohne Schritt 2 und 3 gilt eine Änderung an der Eingabemaske nicht als
+abgenommen.
+
+Fällt JavaScript ganz aus, bleibt jede Zeile ein gewöhnliches Formular mit
+Absendeknopf. Auch ein JS-Fehler kann damit keine Note still verschlucken.
+
+## Störungssuche
+
+| Fehlerbild | Ursache | Abhilfe |
+|---|---|---|
+| `unable to open database file` | `daten/` gehört nicht UID 1000 | `chown -R 1000:1000 …/daten` |
+| Container startet nicht, Protokoll nennt eine ausstehende Migration | neues Image, altes Schema | Migration ausführen, siehe oben |
+| Container startet nicht, Protokoll nennt eine fehlende Datenbank | Datei weg oder falscher Pfad | Sicherung zurückspielen |
+| Anwendung im Tailnet nicht erreichbar | Sidecar läuft nicht | `docker logs notenverwaltung-tailscale`, siehe Inbetriebnahme |
+
+Protokolle:
+
+```bash
+docker logs notenverwaltung --tail 50
+docker logs notenverwaltung-tailscale --tail 50
+```

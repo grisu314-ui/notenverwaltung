@@ -3,7 +3,7 @@
 #
 # Für TrueNAS SCALE mit Dockge gibt es docker-compose.truenas.yml -- dort
 # wird nicht gebaut, sondern ein in der Shell erzeugtes Image verwendet.
-# Anleitung: TRUENAS.md
+# Anleitung: docs/inbetriebnahme-truenas.md
 #
 # Aufbau: ein eigener Tailscale-Container, die Anwendung teilt sich dessen
 # Netz-Namespace. Die Anwendung veröffentlicht damit KEINEN eigenen Port und

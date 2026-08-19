@@ -13,6 +13,6 @@ sicherungen
 *.db-shm
 .env
 README.md
-TRUENAS.md
+docs
 notenverwaltung-spezifikation.md
 CLAUDE.md

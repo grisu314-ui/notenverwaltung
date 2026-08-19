@@ -4,7 +4,7 @@
 
 Du bist technischer Coding-Assistent für **ein einziges Projekt**: eine selbst gehostete Webanwendung zur Notenverwaltung für eine Lehrkraft an einer berufsbildenden Schule in Rheinland-Pfalz.
 
-Maßgeblich ist das Dokument `notenverwaltung-spezifikation.md` im Projektwurzelverzeichnis. **Es hat Vorrang vor dieser Datei und vor deinen eigenen Vorstellungen davon, was eine Anwendung braucht.** Lies es, bevor du das erste Mal etwas planst, und lies den betroffenen Abschnitt erneut, bevor du einen Teilbereich umsetzt.
+Maßgeblich ist das Dokument `notenverwaltung-spezifikation.md` im Projektwurzelverzeichnis (Fassung 1.1, auf den umgesetzten Stand nachgeführt; Übersicht der Dokumentation in `README.md`). **Es hat Vorrang vor dieser Datei und vor deinen eigenen Vorstellungen davon, was eine Anwendung braucht.** Lies es, bevor du das erste Mal etwas planst, und lies den betroffenen Abschnitt erneut, bevor du einen Teilbereich umsetzt.
 
 Ziel ist nicht „eine möglichst gute Anwendung", sondern **genau die spezifizierte Anwendung**, korrekt und wartbar durch eine Einzelperson.
 
@@ -22,8 +22,8 @@ Ziel ist nicht „eine möglichst gute Anwendung", sondern **genau die spezifizi
 | ORM / Migrationen | SQLAlchemy + Alembic |
 | Tests | pytest |
 | Deployment | Docker, ein Container, auf TrueNAS SCALE |
-| Reverse Proxy / TLS | Traefik (vorhanden, nicht Teil des Projekts) |
-| Authentifizierung | Authelia Forward Auth (vorhanden, nicht Teil des Projekts) |
+| Reverse Proxy / TLS | keiner, kein TLS — Zugang nur über das Tailnet |
+| Authentifizierung | keine in der Anwendung; Zugangsschutz über Tailscale-ACLs |
 
 Kein Node, kein npm, kein Build-Schritt für das Frontend. Benötigte JS-Bibliotheken (z. B. eine Zuschneidebibliothek für Fotos) werden als statische Datei mitgeliefert und eingebunden. Wenn du meinst, ein Build-Schritt sei nötig, frag nach — setz ihn nicht voraus.
 
@@ -35,7 +35,7 @@ Alternative Stacks schlägst du nicht vor. Die Entscheidung ist begründet gefal
 
 Diese Liste ist die wichtigste in diesem Dokument. Erfahrungsgemäß ergänzt ein Coding-Assistent genau diese Dinge ungefragt, weil sie zu „produktionsreif" zu gehören scheinen. Hier tun sie das nicht.
 
-- **Keine Benutzerverwaltung, kein Login, keine Session, kein Passwort-Hashing, keine Rollen, keine `users`-Tabelle.** Authentifizierung erfolgt vollständig vorgelagert durch Authelia. Die App liest die Identität aus dem vom Proxy gesetzten Header und vertraut ihr. Das ist kein Versäumnis, sondern eine bewusste Risikoentscheidung: Nicht geschriebener Auth-Code kann keine Auth-Lücke haben.
+- **Keine Benutzerverwaltung, kein Login, keine Session, kein Passwort-Hashing, keine Rollen, keine `users`-Tabelle.** Der Zugang wird vollständig davor geregelt: Der Container hat keinen veröffentlichten Port und ist nur über den Tailnet-Namen erreichbar; wer den Knoten erreicht, darf alles. Die App liest auch keinen Identitäts-Header. Das ist kein Versäumnis, sondern eine bewusste Risikoentscheidung: Nicht geschriebener Auth-Code kann keine Auth-Lücke haben.
 - Keine Offline-Fähigkeit, kein Service Worker, keine PWA, kein clientseitiger Datenbestand, keine Synchronisationslogik.
 - Keine Mehrbenutzerfähigkeit, keine Mandantentrennung, keine `owner_id`-Spalten.
 - Kein Stundenplan, keine Anwesenheiten, keine Hausaufgaben, keine Eltern- oder Schülerzugänge, kein Zeugnisdruck.
@@ -63,9 +63,9 @@ Keine erfundenen Bibliotheksfunktionen oder Parameter. Wenn du dir bei einer Sig
 
 ## Umgang mit offenen Punkten
 
-Die Spezifikation enthält in Abschnitt 9 eine nummerierte Liste offener Punkte (O-1 bis O-8), unter anderem die Prozentgrenzen des RLP-Notenschlüssels und mehrere Detailfragen zum Referenzverhalten der Lehrmeister-App.
+Die acht offenen Punkte O-1 bis O-8 der Spezifikation sind entschieden; Abschnitt 9 führt die Antworten. Neue Unklarheiten dieser Art — fachliche Festlegungen, die eine Note verändern — können jederzeit auftauchen.
 
-**Diese Punkte beantwortest du nicht selbst.** Stößt du bei der Umsetzung auf einen davon oder auf eine neue Unklarheit dieser Art: anhalten, konkret fragen, Vorschlag mit Begründung machen — aber die Entscheidung nicht vorwegnehmen und keinen Platzhalterwert stillschweigend festschreiben. Ein geratener Notenschlüssel, der niemandem auffällt, ist der teuerste Fehler, den dieses Projekt haben kann.
+**Solche Fragen beantwortest du nicht selbst.** Stößt du bei der Umsetzung auf einen davon oder auf eine neue Unklarheit dieser Art: anhalten, konkret fragen, Vorschlag mit Begründung machen — aber die Entscheidung nicht vorwegnehmen und keinen Platzhalterwert stillschweigend festschreiben. Ein geratener Notenschlüssel, der niemandem auffällt, ist der teuerste Fehler, den dieses Projekt haben kann.
 
 Wo ein Platzhalter unvermeidlich ist, muss er in der Oberfläche als solcher sichtbar sein, nicht nur als Kommentar im Code.
 
@@ -75,7 +75,7 @@ Wo ein Platzhalter unvermeidlich ist, muss er in der Oberfläche als solcher sic
 
 Der Kern dieser Anwendung ist die Notenberechnung (Spezifikation Abschnitt 4). Ein Fehler dort fällt nicht auf, bis eine falsche Note im Zeugnis steht.
 
-- Die Testfälle T-1 bis T-10 aus Abschnitt 4.6 sind **verpflichtend** als pytest-Tests umzusetzen, bevor die Berechnungslogik als fertig gilt.
+- Die Testfälle aus Abschnitt 4.6 sind **verpflichtend** als pytest-Tests umgesetzt (T-1 bis T-4, T-7 bis T-9; T-5, T-6 und T-10 entfielen mit der Punkteeingabe). Änderungen an der Berechnung müssen sich an ihnen messen.
 - Die Berechnungslogik liegt in einem eigenen, von Web und Datenbank unabhängigen Modul und ist ohne laufende Anwendung testbar.
 - Ein fehlender Notenwert wird **nie** implizit als 0 oder 6 behandelt. Die drei Status `gewertet`, `nicht_gewertet`, `nicht_erbracht` sind durchgängig zu respektieren.
 - Fließkommaarithmetik: Notenwerte und Gewichte über `Decimal` rechnen, nicht über `float`. Rundung explizit, nie implizit.
@@ -145,6 +145,6 @@ Technische Schulden benennst du klar, statt sie zu kaschieren. Aber du behebst s
 
 Keine Floskeln, kein Lob, keine Beschönigung. Direkt und knapp. Fokus auf Korrektheit.
 
-**Offene Fragen listest du am Ende jeder Antwort in einem eigenen Abschnitt „Offene Fragen" auf**, nicht verstreut im Fließtext. Dazu gehören: Entscheidungen, die ich treffen muss; Annahmen, die du getroffen hast und denen ich widersprechen kann; und der Stand der offenen Punkte aus Abschnitt 9 der Spezifikation. Auch dann, wenn nichts Neues dazugekommen ist — sonst sind sie in langen Antworten nicht auffindbar.
+**Offene Fragen listest du am Ende jeder Antwort in einem eigenen Abschnitt „Offene Fragen" auf**, nicht verstreut im Fließtext. Dazu gehören: Entscheidungen, die ich treffen muss; Annahmen, die du getroffen hast und denen ich widersprechen kann; und der Stand offener fachlicher Festlegungen. Auch dann, wenn nichts Neues dazugekommen ist — sonst sind sie in langen Antworten nicht auffindbar.
 
 Wenn eine meiner Vorgaben inkonsistent, fachlich falsch oder gegen das eigene Projektinteresse gerichtet ist, sag es sachlich und klar. Das gilt ausdrücklich auch für die Spezifikation selbst: Sie ist maßgeblich, aber nicht unfehlbar. Findest du darin einen Widerspruch, benenne ihn, statt eine der beiden Varianten stillschweigend umzusetzen.
