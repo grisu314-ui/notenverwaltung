@@ -80,6 +80,7 @@ Eine Klasse gehört zu genau einem Schuljahr.
 - Eine Klasse enthält mehrere Kurse. Ein Kurs gehört zu genau einer Klasse.
 - „Kurs" entspricht hier faktisch „Fach in dieser Klasse".
 - Die beiden Gewichte steuern die Jahresnote (4.5), Vorgabe 50/50.
+- Beim Anlegen eines Kurses entstehen **je Halbjahr drei Notengruppen als Vorgabe** (siehe *Notengruppe*).
 
 **Kursteilnahme** (n:m, Schüler ↔ Kurs)
 `kurs_id`, `schueler_id`, `ist_aktiv`
@@ -106,6 +107,18 @@ Eine Klasse gehört zu genau einem Schuljahr.
 
 - Gewichte werden **pro Kurs und Halbjahr** definiert.
 - Gewichte müssen sich nicht auf 100 summieren (siehe 4.4).
+- **Vorgabegruppen.** Beim Anlegen eines Kurses entstehen automatisch je Halbjahr drei Gruppen — sechs Datensätze je Kurs:
+
+  | Bezeichnung | Gewicht | Reihenfolge |
+  |---|---|---|
+  | Klassenarbeit | 70 | 1 |
+  | Kleiner Nachweis | 30 | 2 |
+  | Mitarbeit | 3 | 3 |
+
+  Bezeichnung und Gewicht sind danach frei änderbar, weitere Gruppen lassen sich anlegen, leere lassen sich löschen. Die Vorgabe ist ein Startpunkt, keine Festlegung.
+
+  **Das Gewicht 3 für die Mitarbeit ist kein Tippfehler.** Die Berechnung ist einstufig (4.4): Eine Gruppe wirkt umso stärker, je mehr Noten sie enthält. Mitarbeitsnoten entstehen einzeln über das Schuljahr verteilt (5.6) und wären mit einem Gewicht in der Größenordnung der anderen Gruppen schnell die schwerste Position im Zeugnis. Mit 3 bleiben auch zwanzig Mitarbeitsnoten unter drei kleinen Nachweisen.
+- Bestehende Kurse erhalten die Vorgabegruppen **nicht rückwirkend**; sie werden dort von Hand angelegt. Eine Migration, die in vorhandene Notenberechnungen eingreift, findet nicht statt.
 
 **Leistung** (eine Bewertungssituation, z. B. „2. Klassenarbeit")
 `id`, `notengruppe_id`, `bezeichnung`, `datum`, `gewicht` (Standard 1.0), `notiz`
@@ -168,6 +181,8 @@ Noten werden ausschließlich **direkt als Notenstufe mit Tendenz** eingetragen (
 - `nicht_erbracht` — geht als 6 (6,0) in die Berechnung ein.
 
 Die Unterscheidung zwischen „nicht gewertet" und „fehlt" ist zwingend. Ein fehlender Wert darf **niemals** implizit als 0 oder als 6 behandelt werden.
+
+**Zwei Wege zur Note.** Der Regelweg ist die Serieneingabe (5.4): eine Leistung, alle Teilnehmer nacheinander. Daneben steht die **Mitarbeitsnote aus dem Sitzplan** (5.6) — eine einzelne Note für einen einzelnen Schüler an einem Tag. Beide schreiben denselben Datensatz und dieselbe Änderungshistorie (3.2); es gibt keinen zweiten Rechenweg.
 
 ### 4.4 Berechnung der Halbjahresnote
 
@@ -259,7 +274,7 @@ Schuljahre, Halbjahre, Klassen, Kurse, Notengruppen mit Gewichten, Kursteilnahme
 
 ### 5.6 Sitzplan
 
-Zweck: Die Lehrkraft sieht während des Unterrichts, **wer wo sitzt** — mit Foto und Namen, in derselben Darstellung wie die Klassenansicht (5.1). Ein Sitzplan ist eine *Ansicht auf Schüler*. Er trägt keine Note ein, verändert keine und zeigt keine.
+Zweck: Die Lehrkraft sieht während des Unterrichts, **wer wo sitzt** — mit Foto und Namen, in derselben Darstellung wie die Klassenansicht (5.1). Ein Sitzplan ist eine *Ansicht auf Schüler*; die einzige Note, die er berührt, ist die Mitarbeitsnote des laufenden Tages (siehe unten).
 
 **Genau ein Sitzplan je Klasse.** Er gehört zu genau einer Klasse, trägt keine eigene Bezeichnung — er heißt wie seine Klasse — und ist aus der Klassenansicht mit einem Tipper erreichbar. Es gibt keine Auswahlliste, keinen zweiten Plan für einen anderen Raum und **keine gesonderte Klausurordnung**.
 
@@ -311,10 +326,26 @@ Der Sitzplan hängt an der Klasse und damit an deren Schuljahr (3.1). Er bleibt 
 
 Das Deaktivieren ist in dieser Anwendung durchgängig die *umkehrbare* Alternative zum Löschen; die Sitzordnung verhält sich genauso. Ein Räumen des Platzes beim Deaktivieren wäre ein Datenverlust an einer Stelle, an der niemand mit dem Sitzplan rechnet.
 
+#### Die Mitarbeitsnote des Tages
+
+Der einzige Weg, auf dem der Sitzplan eine Note berührt. Gedacht für den Moment im Unterricht, in dem eine Leistung auffällt — **nach oben wie nach unten**. Der Regelfall ist, dass an einem Tag **niemand oder nur einzelne** eine Mitarbeitsnote bekommen; eine Note für jeden ist ausdrücklich nicht gemeint.
+
+**Der Kurs wird beim Öffnen gewählt.** Der Sitzplan gehört zur Klasse, eine Note zu einem Kurs. Beim Öffnen des Plans wird deshalb einmal der Kurs gewählt, in dem gerade unterrichtet wird; er bleibt oben sichtbar und gilt für die ganze Sitzung. Ohne gewählten Kurs bietet der Plan keine Mitarbeitsnote an.
+
+**Eintragen.** Im Menü eines besetzten Platzes steht neben „Platz räumen" und „Tauschen" der Eintrag **„Mitarbeitsnote"**. Er öffnet die Auswahl 1+ … 6 und ein **Notizfeld** — die Begründung, die man drei Monate später nicht mehr im Kopf hat. Gespeichert wird nach der Antwort des Servers, sichtbar bestätigt wie überall (10).
+
+**Wohin die Note gehört.** In die Notengruppe **„Mitarbeit"** des gewählten Kurses, im Halbjahr, in das das heutige Datum fällt. Innerhalb dieser Gruppe entsteht je Tag **eine Leistung** „Mitarbeit TT.MM.JJJJ" mit Gewicht 1,0 — angelegt beim ersten Eintrag des Tages, nicht vorab. Wer an diesem Tag keine Note bekommt, hat dort **keinen Datensatz**; das ist kein fehlender Wert, sondern keine Leistung, und es verändert die Berechnung nicht (4.4).
+
+**Voraussetzung.** Der Kurs muss im betreffenden Halbjahr eine Notengruppe „Mitarbeit" haben. Bei neu angelegten Kursen ist sie als Vorgabe vorhanden (3.1); bei älteren Kursen wird sie von Hand angelegt. Fehlt sie, verweigert die Anwendung den Eintrag mit einer Meldung, die genau das sagt — sie legt keine Gruppe im Vorbeigehen an, weil deren Gewicht eine Zeugnisnote verschiebt.
+
+**Status und Rücknahme.** Eine Mitarbeitsnote ist immer `gewertet`. Die Status `nicht_gewertet` und `nicht_erbracht` haben hier keinen Sinn: Es gibt keine Leistung, die jemand hätte erbringen müssen. Eine falsch vergebene Note wird **gelöscht**, nicht umgewidmet; die Änderungshistorie (3.2) hält das fest wie bei jeder anderen Note.
+
+**In der Übersicht.** Mitarbeitsnoten erscheinen in Kursübersicht (5.3), Schülerblatt (5.2) und Export (8) wie jede andere Note, gruppiert unter „Mitarbeit", chronologisch nach Datum. Es gibt keine gesonderte Darstellung und keine zweite Rechenart.
+
 #### Ausdrücklich nicht Bestandteil
 
 - **Keine Anwesenheiten, keine Fehlzeiten.** Das ist und bleibt ein Nicht-Ziel (1). Ein Sitzplan lädt dazu ein; er ist dafür nicht der Einstieg.
-- **Keine Noteneingabe und keine Notenanzeige im Plan.** Der Weg zur Note führt über die Serieneingabe (5.4).
+- **Keine Notenanzeige im Plan.** Der Plan zeigt Foto und Name, keine Noten und keinen Notenstand. Eingetragen wird ausschließlich die Mitarbeitsnote des Tages (siehe oben), und auch die erscheint danach nicht auf dem Platz.
 - Kein zweiter Plan je Klasse, keine Klausurordnung, kein Duplizieren.
 - Keine frei platzierbaren Tische, kein Zoom, kein Ziehen.
 - Kein Übertrag zwischen Schuljahren.
@@ -416,7 +447,12 @@ die in keiner früheren Fassung stand und noch nicht gebaut ist:
 | 5.6 | Drucken **mit Fotos**, kein Dateiexport | Entscheidung des Betreibers; ohne Fotos hat der Ausdruck für den Zweck zu wenig Wert. Der Ausdruck liegt außerhalb der Reichweite der Löschfunktion (11) |
 | 5.6 | Ein zweiter Plan je Klasse, eine gesonderte Klausurordnung und ein Planname ausdrücklich ausgeschlossen | Entscheidung des Betreibers: gebraucht wird eine Sitzordnung je Klasse, sonst nichts. Der Plan heißt wie seine Klasse |
 | 3.1, 11 | Entitäten *Sitzplan* und *Sitzplatz* ergänzt; die Löschfunktion nimmt die Sitzplatzzuweisungen mit und weist sie in der Zählung aus | Folge von 5.6 |
-| 5.6 | Anwesenheiten und Noteneingabe im Plan ausdrücklich ausgeschlossen | Anwesenheiten sind ein Nicht-Ziel (1); ein Sitzplan lädt dazu ein, sie doch mitzuerfassen |
+| 5.6 | Anwesenheiten im Plan ausdrücklich ausgeschlossen | Anwesenheiten sind ein Nicht-Ziel (1); ein Sitzplan lädt dazu ein, sie doch mitzuerfassen |
+| 5.6, 4.3 | **Mitarbeitsnote des Tages** aus dem Sitzplan ergänzt, mit Notizfeld; der Kurs wird beim Öffnen des Plans gewählt | Wunsch des Betreibers. Die Stufe, die in der ersten Fassung von 5.6 ausdrücklich noch nicht gebaut wurde |
+| 5.6 | Je Kurs, Halbjahr und Tag entsteht eine Leistung „Mitarbeit TT.MM.JJJJ", angelegt beim ersten Eintrag | Der Regelfall ist, dass an einem Tag niemand oder nur einzelne eine Note bekommen |
+| 3.1 | **Drei Vorgabe-Notengruppen** je Kurs und Halbjahr: Klassenarbeit 70, Kleiner Nachweis 30, Mitarbeit 3 | Entscheidung des Betreibers. Bestehende Kurse bleiben unangetastet |
+| 3.1 | Gewicht der Mitarbeit von 10 auf **3** gesenkt, bevor etwas gebaut wurde | Bei einstufiger Rechnung (4.4) wiegt eine Gruppe umso schwerer, je mehr Noten sie enthält. Mit 10 wären Mitarbeitsnoten die schwerste Position im Zeugnis geworden |
+| 5.6 | Tafel **immer unten**, am Bildschirm wie im Ausdruck | Der Plan zeigt den Raum aus Sicht der Lehrkraft |
 
 ---
 
