@@ -1,9 +1,8 @@
 # Notenverwaltung – Projektspezifikation
 
 **Version:** 1.2 · **Stand:** 19.08.2026
-**Zweck:** Beschreibt, *was* gebaut wurde, nicht *wie*. Version 1.1 war auf den
-umgesetzten Stand nachgeführt; Version 1.2 ergänzt mit dem Sitzplan (5.6) einen
-Abschnitt, der **noch nicht umgesetzt** ist und als solcher gekennzeichnet ist.
+**Zweck:** Beschreibt, *was* gebaut wurde, nicht *wie*. Version 1.2 ergänzt den
+Sitzplan (5.6, dazu die beiden Entitäten in 3.1); er ist inzwischen umgesetzt.
 Die Änderungslisten stehen gesammelt am Ende.
 **Auftraggeber/Betreiber/Alleinnutzer:** eine Lehrkraft an einer berufsbildenden Schule (Rheinland-Pfalz).
 
@@ -87,6 +86,20 @@ Eine Klasse gehört zu genau einem Schuljahr.
 
 - Beim Anlegen eines Kurses werden alle aktiven Schüler der Klasse eingetragen; ein später angelegter Schüler kommt in die bestehenden Kurse.
 - Das explizite Zwischenmodell ist nötig, weil nicht jeder Schüler jeden Kurs seiner Klasse besucht (Differenzierung, Wahlpflicht, Zusatzqualifikation). Ohne dieses Modell entstehen später falsche Klassendurchschnitte.
+
+**Sitzplan** (5.6)
+`id`, `klasse_id`, `reihen`, `sitze_je_reihe`
+
+- Genau einer je Klasse; `klasse_id` ist eindeutig. Der Datensatz entsteht beim ersten Öffnen des Plans, nicht beim Anlegen der Klasse.
+- Raster 1 bis 12 in beide Richtungen, unabhängig einstellbar, Vorgabe 5 × 6.
+
+**Sitzplatz** (5.6)
+`id`, `sitzplan_id`, `schueler_id`, `reihe`, `position`
+
+- Nur **belegte** Plätze haben einen Datensatz. Die leeren ergeben sich aus dem Raster; ein Plan mit dreißig Sitzen und zwei Schülern sind zwei Zeilen, nicht dreißig.
+- Je Sitzplan sind (`reihe`, `position`) und `schueler_id` jeweils eindeutig: ein Platz trägt einen Schüler, ein Schüler sitzt an einem Platz.
+- Dass ein Platz innerhalb des Rasters liegt, prüft die Anwendung, nicht das Schema — SQLite erlaubt in einer `CHECK`-Bedingung keine Unterabfrage.
+- Der Datensatz **überlebt das Deaktivieren** des Schülers. Der Platz wird dann als frei angezeigt und der Schüler sitzt wieder dort, wenn er erneut aktiv gesetzt wird.
 
 **Notengruppe**
 `id`, `kurs_id`, `halbjahr_id`, `bezeichnung` (z. B. „Klassenarbeiten", „Tests", „Mitarbeit"), `gewicht` (Dezimal), `reihenfolge`
@@ -246,10 +259,6 @@ Schuljahre, Halbjahre, Klassen, Kurse, Notengruppen mit Gewichten, Kursteilnahme
 
 ### 5.6 Sitzplan
 
-> **Noch nicht umgesetzt.** Dieser Abschnitt kam mit Fassung 1.2 hinzu und
-> beschreibt einen Soll-Stand. Der übrige Teil des Dokuments beschreibt den
-> gebauten Stand.
-
 Zweck: Die Lehrkraft sieht während des Unterrichts, **wer wo sitzt** — mit Foto und Namen, in derselben Darstellung wie die Klassenansicht (5.1). Ein Sitzplan ist eine *Ansicht auf Schüler*. Er trägt keine Note ein, verändert keine und zeigt keine.
 
 **Genau ein Sitzplan je Klasse.** Er gehört zu genau einer Klasse, trägt keine eigene Bezeichnung — er heißt wie seine Klasse — und ist aus der Klassenansicht mit einem Tipper erreichbar. Es gibt keine Auswahlliste, keinen zweiten Plan für einen anderen Raum und **keine gesonderte Klausurordnung**.
@@ -386,7 +395,7 @@ Die Anwendung verarbeitet Klarnamen und Lichtbilder von Schülerinnen und Schül
 
 Daraus folgt konkret:
 
-- Eine **Löschfunktion** pro Schüler und pro Schuljahr, die Noten, Foto und Historie vollständig entfernt, ist Pflichtbestandteil. Umgesetzt mit vorgeschalteter Zählung des Umfangs und getippter Bestätigung; die Daten werden anschließend auch physisch aus der Datei entfernt.
+- Eine **Löschfunktion** pro Schüler und pro Schuljahr, die Noten, Foto, Historie und Sitzplatzzuweisungen vollständig entfernt, ist Pflichtbestandteil. Umgesetzt mit vorgeschalteter Zählung des Umfangs und getippter Bestätigung; die Daten werden anschließend auch physisch aus der Datei entfernt.
 - Der Datenbestand muss **exportierbar** sein (Abschnitt 8), damit kein Lock-in entsteht.
 - Es dürfen keine Daten die Anwendung verlassen außer durch den ausdrücklich ausgelösten Export.
 
@@ -401,11 +410,12 @@ die in keiner früheren Fassung stand und noch nicht gebaut ist:
 
 | Abschnitt | Änderung | Grund |
 |---|---|---|
-| 5.6 | **Sitzplan neu aufgenommen** — **genau einer je Klasse**, ein Raster aus Reihen und Sitzen (je 1 bis 12, Vorgabe 5 × 6), mit Foto und Namen wie in der Klassenansicht | Wunsch des Betreibers: im Unterricht sehen, wer wo sitzt. Der Abschnitt beschreibt den Soll-Stand und ist als noch nicht umgesetzt gekennzeichnet |
+| 5.6 | **Sitzplan neu aufgenommen** — **genau einer je Klasse**, ein Raster aus Reihen und Sitzen (je 1 bis 12, Vorgabe 5 × 6), mit Foto und Namen wie in der Klassenansicht | Wunsch des Betreibers: im Unterricht sehen, wer wo sitzt |
 | 5.6 | Bezugsobjekt ist die **Klasse**, nicht der Kurs; kein Kursfilter | Entscheidung des Betreibers. Der Plan bildet den Raum ab, nicht die Teilnehmerliste |
 | 5.6 | Zuweisung in zwei Tippern, **kein Ziehen**; getrennter Bearbeitungsmodus | Maßstab ist das einhändig gehaltene Telefon (10). Ziehen ist so nicht bedienbar und bestimmt damit auch die Rasterform des Raums |
 | 5.6 | Drucken **mit Fotos**, kein Dateiexport | Entscheidung des Betreibers; ohne Fotos hat der Ausdruck für den Zweck zu wenig Wert. Der Ausdruck liegt außerhalb der Reichweite der Löschfunktion (11) |
 | 5.6 | Ein zweiter Plan je Klasse, eine gesonderte Klausurordnung und ein Planname ausdrücklich ausgeschlossen | Entscheidung des Betreibers: gebraucht wird eine Sitzordnung je Klasse, sonst nichts. Der Plan heißt wie seine Klasse |
+| 3.1, 11 | Entitäten *Sitzplan* und *Sitzplatz* ergänzt; die Löschfunktion nimmt die Sitzplatzzuweisungen mit und weist sie in der Zählung aus | Folge von 5.6 |
 | 5.6 | Anwesenheiten und Noteneingabe im Plan ausdrücklich ausgeschlossen | Anwesenheiten sind ein Nicht-Ziel (1); ein Sitzplan lädt dazu ein, sie doch mitzuerfassen |
 
 ---

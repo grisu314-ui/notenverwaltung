@@ -30,7 +30,7 @@ Verzeichnis muss existieren — SQLite legt es nicht an und meldet sonst nur
 .venv/bin/pytest
 ```
 
-376 Tests. Jeder baut sich seine eigene Datenbank **über die Alembic-Migration
+427 Tests. Jeder baut sich seine eigene Datenbank **über die Alembic-Migration
 auf**; `create_all()` wird nirgends verwendet, auch nicht im Test. Damit ist
 die Migration bei jedem Lauf mitgeprüft. Der Lauf bricht ab, wenn
 `NOTENVERWALTUNG_DB` gesetzt ist — Tests fassen keinen konfigurierten
@@ -48,6 +48,7 @@ Wichtige Dateien:
 | `test_migration.py` | dass Modelle und Migration übereinstimmen |
 | `test_backup.py` | Sicherung und die Folgen eines `cp` im WAL-Modus |
 | `test_loeschen.py` | dass gelöschte Fotobytes die Datei verlassen |
+| `test_sitzplan.py` | den Sitzplan: inaktive Schüler, Raster verkleinern, Tauschen |
 
 ## Aufbau
 
@@ -90,6 +91,7 @@ und rendern.
 | `foto.py` | Bilder prüfen und neu kodieren |
 | `export.py` | XLSX und Markdown |
 | `loeschen.py` | endgültiges Löschen samt Verdichten der Datei |
+| `sitzplan.py` | Sitzplan: Raster bauen, Plätze setzen, räumen, tauschen |
 | `settings.py` | persistierte Einstellungen |
 | `fehler.py` | Datenbankfehler → lesbarer deutscher Satz |
 
@@ -167,6 +169,10 @@ Bei einem Fehlschlag die alten Pins wiederherstellen.
 Neue Bibliotheken sparsam: Jede ist etwas, das der Betreiber allein aktuell
 halten muss. Nichts, was sich in unter fünfzig Zeilen selbst schreiben lässt.
 
+Für den Sitzplan (5.6) kam **keine** Bibliothek dazu. Zugewiesen wird mit zwei
+Tippern statt mit Ziehen — das ist einhändig auf dem Telefon ohnehin die
+bedienbare Form und kommt mit htmx und serverseitigem Rendern aus.
+
 `app/web/static/htmx.min.js` ist htmx 2.0.10 (Lizenz 0BSD), mitgeliefert statt
 über ein CDN. Aktualisierung von Hand:
 
@@ -193,6 +199,8 @@ fehlen nicht, sie sind entschieden.
 | Hintergrundprozesse, Queue, Cache | Nichts läuft länger als eine Anfrage |
 | Indizes, Pagination, Denormalisierung | Keine Optimierung ohne gemessenen Anlass — wenige hundert Schüler |
 | Automatische Migration beim Start | Der Container startet lieber nicht, als den produktiven Bestand ungefragt umzubauen |
+| Ziehen und Fallenlassen im Sitzplan, frei platzierbare Tische | Einhändig im Stehen nicht bedienbar; zwei Tipper auf ein Raster sind es (5.6) |
+| Zweiter Sitzplan je Klasse, Klausurordnung, Übertrag ins Folgejahr | Gebraucht wird eine Sitzordnung je Klasse, sonst nichts |
 | Oberfläche für die Änderungshistorie | Die Tabelle beantwortet die Frage per SQL, wenn sie gestellt wird |
 | Gruppenmittel in Übersicht und Export | Existiert bei einstufiger Berechnung nicht |
 

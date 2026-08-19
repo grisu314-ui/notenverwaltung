@@ -36,6 +36,7 @@ from app.db.models import (
     Notenueberschreibung,
     Schueler,
     Schuljahr,
+    Sitzplatz,
 )
 
 logger = logging.getLogger(__name__)
@@ -86,6 +87,10 @@ def umfang_schueler(session: Session, schueler: Schueler) -> Umfang:
                     Notenueberschreibung.schueler_id == schueler.id,
                 ),
             ),
+            (
+                "Sitzplatzzuweisungen",
+                _anzahl(session, Sitzplatz, Sitzplatz.schueler_id == schueler.id),
+            ),
         )
     )
 
@@ -97,9 +102,12 @@ def umfang_schuljahr(session: Session, schuljahr: Schuljahr) -> Umfang:
     notengruppen = [gruppe for kurs in kurse for gruppe in kurs.notengruppen]
     leistungen = [le for gruppe in notengruppen for le in gruppe.leistungen]
 
+    sitzplaene = [klasse.sitzplan for klasse in klassen if klasse.sitzplan is not None]
+
     schueler_ids = [s.id for s in schueler]
     kurs_ids = [k.id for k in kurse]
     leistung_ids = [le.id for le in leistungen]
+    sitzplan_ids = [plan.id for plan in sitzplaene]
 
     def zaehle(modell, spalte, werte) -> int:
         return _anzahl(session, modell, spalte.in_(werte)) if werte else 0
@@ -122,6 +130,11 @@ def umfang_schuljahr(session: Session, schuljahr: Schuljahr) -> Umfang:
             (
                 "festgesetzte Noten",
                 zaehle(Notenueberschreibung, Notenueberschreibung.kurs_id, kurs_ids),
+            ),
+            ("Sitzpläne", len(sitzplaene)),
+            (
+                "Sitzplatzzuweisungen",
+                zaehle(Sitzplatz, Sitzplatz.sitzplan_id, sitzplan_ids),
             ),
         )
     )

@@ -60,10 +60,84 @@ Anwendung ist gestoppt. Verboten ist `cp` nur auf die **laufende** Datenbank.
 Schritt 2 nicht überspringen. Bleiben `-wal` und `-shm` des alten Standes
 liegen, mischt SQLite sie in die wiederhergestellte Datei.
 
+## Testumgebung
+
+Ein zweiter Stack neben dem produktiven, mit eigenem Verzeichnisbaum und
+eigenem Tailnet-Namen. Damit lässt sich eine neue Version vollständig
+ausprobieren, ohne den laufenden Betrieb oder den echten Datenbestand zu
+berühren.
+
+```bash
+sudo mkdir -p /mnt/Daten-Z1/apps/notenverwaltung-dev/{daten,sicherungen,tailscale}
+sudo chown -R 1000:1000 /mnt/Daten-Z1/apps/notenverwaltung-dev/{daten,sicherungen}
+# tailscale/ gehört root -- tailscaled läuft im Container als root
+```
+
+Das dritte Verzeichnis wird leicht vergessen: Es steht als Volume in der
+`compose.yaml` und nimmt den Knotenzustand des Sidecars auf.
+
+### Was gegenüber dem produktiven Stack anders sein muss
+
+Keine zweite Compose-Datei im Quellbaum, sondern eine Kopie der produktiven
+mit sechs geänderten Werten — eine mitgepflegte zweite Datei läuft
+erfahrungsgemäß auseinander:
+
+| Stelle | produktiv | Test |
+|---|---|---|
+| alle drei Pfade | `…/notenverwaltung/…` | `…/notenverwaltung-dev/…` |
+| `container_name` (Sidecar) | `notenverwaltung-tailscale` | `notenverwaltung-dev-tailscale` |
+| `hostname`, `TS_HOSTNAME` | `notenverwaltung` | `notenverwaltung-dev` |
+| `TS_AUTHKEY` in `.env` | der produktive Schlüssel | **eigener** Schlüssel |
+| `container_name` (App) | `notenverwaltung` | `notenverwaltung-dev` |
+| `image:` | der produktive Tag | z. B. `notenverwaltung:sitzplan-test` |
+
+Damit entsteht ein zweiter Tailnet-Knoten; beide sind nebeneinander
+erreichbar. **Keine zweite Cron-Sicherung einrichten** — der bestehende
+Eintrag zeigt auf die produktiven Pfade, und die Testdaten sind nichts wert.
+
+**Das produktive `daten/` wird in den Test-Stack nie eingehängt.** Solange die
+Pfade getrennt sind, kann der Testcontainer den echten Bestand nicht anfassen.
+
+### Womit die Testdatenbank gefüllt wird
+
+Zwei verschiedene Fragen, zwei verschiedene Wege:
+
+*Funktioniert die neue Funktion?* — mit erfundenen Namen und
+Platzhalterbildern. Das Skript bricht ab, wenn die Datenbank nicht leer ist.
+
+```bash
+cd /mnt/Daten-Z1/apps/notenverwaltung-dev
+docker run --rm \
+    -v /mnt/Daten-Z1/apps/notenverwaltung-dev/daten:/daten \
+    --entrypoint alembic \
+    notenverwaltung:NEUER-TAG upgrade head
+docker run --rm \
+    -v /mnt/Daten-Z1/apps/notenverwaltung-dev/daten:/daten \
+    --entrypoint python \
+    notenverwaltung:NEUER-TAG scripts/seed_dev.py
+```
+
+*Läuft die Migration auf meinem echten Bestand?* — mit einer Kopie, gezogen
+über `scripts/backup.py` (also `VACUUM INTO`, nie `cp`). Danach liegen im
+Test-Verzeichnis **echte Namen und Lichtbilder**: dieselbe Behandlung wie
+produktiv, und nach dem Probelauf wieder löschen.
+
+```bash
+# die jüngste Sicherung heißt notenverwaltung-JJJJ-MM-TT-HHMMSS.db
+sudo cp /mnt/Daten-Z1/apps/notenverwaltung/sicherungen/notenverwaltung-JJJJ-MM-TT-HHMMSS.db \
+        /mnt/Daten-Z1/apps/notenverwaltung-dev/daten/notenverwaltung.db
+sudo chown 1000:1000 /mnt/Daten-Z1/apps/notenverwaltung-dev/daten/notenverwaltung.db
+# migrieren wie oben, dann den Test-Stack starten und ansehen
+```
+
+Erst wenn das sauber läuft, den nächsten Abschnitt gegen den produktiven
+Stack fahren.
+
 ## Neue Version einspielen
 
 **Die Reihenfolge ist nicht beliebig: erst sichern, dann migrieren, dann
-starten.**
+starten.** Bei einer Version mit Schemaänderung vorher den vorigen Abschnitt
+durchlaufen — einmal in der Testumgebung, gegen eine Kopie.
 
 ```bash
 cd /mnt/Daten-Z1/apps/notenverwaltung
@@ -178,6 +252,22 @@ abgenommen.
 
 Fällt JavaScript ganz aus, bleibt jede Zeile ein gewöhnliches Formular mit
 Absendeknopf. Auch ein JS-Fehler kann damit keine Note still verschlucken.
+
+### Der Sitzplan hat denselben Weg
+
+Ein verlorener Sitzplatz wiegt weit weniger als eine verlorene Note, die
+Bauart ist aber dieselbe: Der Server antwortet mit dem gespeicherten Stand,
+und `sitzplan.js` deckt nur ab, was keine Antwort ist. Nach einer Änderung am
+Sitzplan derselbe Durchlauf, verkürzt:
+
+1. Einen Schüler auf einen Platz setzen. → Über dem Raster steht
+   „gespeichert", der Schüler sitzt dort.
+2. **Flugmodus einschalten**, einen weiteren Schüler setzen. → Rote Meldung
+   „NICHT gespeichert – keine Verbindung".
+3. Flugmodus aus, Seite neu laden. → Der erste sitzt, der zweite nicht.
+
+Ohne JavaScript bleibt jeder Platz ein gewöhnlicher Link und jede Zuweisung
+ein Formular mit Absendeknopf.
 
 ## Störungssuche
 
