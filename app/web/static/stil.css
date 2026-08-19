@@ -490,7 +490,7 @@ table.matrix.spiegel .wert {
   border-radius: 0.375rem;
   color: var(--gedaempft);
   letter-spacing: 0.1em;
-  margin: 0 0 0.75rem;
+  margin: 0.75rem 0 0;
   padding: 0.375rem;
   text-align: center;
   text-transform: uppercase;
@@ -670,19 +670,6 @@ table.matrix.spiegel .wert {
   main {
     max-width: none;
     padding: 0;
-  }
-
-  /* Auf Papier steht die Tafel unten: Der Ausdruck wird von vorn gelesen,
-     mit dem Rücken zur Tafel, und die Reihen laufen dann von der Tafel weg
-     auf den Leser zu. Am Bildschirm bleibt sie oben. */
-  .sitzplan {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .tafel {
-    margin: 0.75rem 0 0;
-    order: 99;
   }
 
   .platz {
