@@ -1,8 +1,10 @@
 # Inbetriebnahme auf TrueNAS SCALE
 
-Diese Anleitung beschreibt den vollständigen Weg von der Quelle bis zum
-laufenden Stack in Dockge. Sie ergänzt den Abschnitt „Betrieb im Container"
-in `README.md` um das, was auf TrueNAS anders ist.
+Der vollständige Weg von der Quelle bis zum laufenden Stack in Dockge.
+Erprobt — die Anleitung ist einmal von Anfang bis Ende durchgelaufen.
+
+Für den **laufenden** Betrieb — Sicherung, Wiederherstellung, Update — siehe
+[`betrieb.md`](betrieb.md).
 
 Vorausgesetzt: TrueNAS SCALE mit Docker (ab 24.10 „Electric Eel"), Dockge als
 App, Shell-Zugang.
@@ -46,26 +48,18 @@ Container keine Datenbank und beendet sich sofort wieder.
 
 ---
 
-## Warum hier gebaut wird und nicht auf dem Pi
+## Gebaut wird auf dem NAS, in der Shell
 
-TrueNAS SCALE gibt es nur für x86-64, der Raspberry Pi ist `aarch64`. Ein auf
-dem Pi gebautes Image startet auf TrueNAS **nicht** — Fehlerbild
-`exec format error`. Es gibt keinen Grund, den Umweg über eine Registry oder
-einen Multi-Arch-Build unter Emulation zu gehen: Der Docker-Daemon auf dem NAS
-baut das Image in ein paar Minuten selbst.
+**Nicht in Dockge**: Dockge führt `docker compose` in seinem eigenen Container
+aus, ein Build-Kontext müsste dort unter identischem Pfad sichtbar sein. Es
+beherrscht außerdem kein `docker compose run`, das zum Anlegen der Datenbank
+und für Migrationen gebraucht wird. Dockge startet und stoppt den Stack, mehr
+nicht.
 
-Der Pi bleibt als Teststand nützlich. Dort wird dasselbe Repository
-unabhängig für `arm64` gebaut; im Dockerfile ist nichts architekturabhängig.
-Bedingung ist ein **64-bit-Betriebssystem** auf dem Pi (`uname -m` muss
-`aarch64` melden) — auf `armv7l` fehlt für `pydantic-core` ein fertiges Wheel.
-
-**Gebaut wird in der Shell, nicht in Dockge.** Dockge führt `docker compose`
-in seinem eigenen Container aus; ein Build-Kontext müsste dort unter
-identischem Pfad sichtbar sein. Diese Zusatzbedingung muss nach jedem
-Dockge-Update wieder stimmen. Außerdem beherrscht Dockge kein
-`docker compose run`, das für das erstmalige Anlegen der Datenbank und für
-Migrationen gebraucht wird — die Shell brauchen Sie also ohnehin. Dockge
-startet und stoppt den Stack, mehr nicht.
+**Nicht auf einem anderen Rechner**, jedenfalls nicht auf einem mit anderer
+Architektur: TrueNAS SCALE gibt es nur für x86-64. Ein anderswo gebautes Image
+— etwa auf einem Raspberry Pi (`aarch64`) — scheitert hier mit
+`exec format error`.
 
 ---
 
@@ -234,15 +228,31 @@ Compose-Datei bindet im Zweifel das falsche Verzeichnis ein.
 
 **Zwei Werte sind einzutragen:**
 
-1. `tailscale/tailscale:VERSION` — der Platzhalter steht absichtlich so da:
-   Der Stack startet nicht, bis eine Version eingetragen ist. `latest` wäre
-   die schlechtere Wahl, der Sidecar tauscht sich sonst irgendwann unbemerkt
-   aus. Sinnvoll ist die Version, die Ihr bestehender Tailscale-Container auf
-   dem NAS bereits verwendet:
+1. `tailscale/tailscale:VERSION` — **beim ersten Mal `latest` eintragen.**
+   Das läuft, und Sie kommen ohne Umweg zu einem laufenden Stack.
+
+   Der Grund für den Platzhalter: Dieser Aufbau setzt voraus, dass das Image
+   von selbst startet und dabei `TS_AUTHKEY` auswertet — das macht das
+   Programm `containerboot`, das erst in neueren Tailscale-Images steckt.
+   Ältere Images führen nur ein blankes `/bin/sh` aus, das sofort endet; der
+   Stack läuft dann nie an (siehe „Störungssuche"). Eine geratene
+   Versionsnummer trifft diesen Fall leicht.
+
+   Die Version Ihres **bestehenden** Tailscale-Containers ist dabei kein
+   guter Anhaltspunkt — sie kann Jahre alt sein und trotzdem laufen, weil
+   dieser Container anders gestartet wird.
+
+   **Sobald der Stack läuft, die Version festnageln.** Sie am laufenden
+   Container ablesen und eintragen:
 
    ```bash
-   docker ps --filter ancestor=tailscale/tailscale --format '{{.Image}}'
+   docker exec notenverwaltung-tailscale tailscale version | head -1
    ```
+
+   Aus `1.90.2` wird `image: tailscale/tailscale:v1.90.2`, dann neu
+   deployen. Damit bleibt der Sidecar auf einem Stand, der nachweislich
+   funktioniert hat, statt sich beim nächsten Pull unbemerkt auszutauschen.
+   `latest` ist der Weg zum ersten Start, nicht der Dauerzustand.
 
 2. `notenverwaltung:JJJJ-MM-TT` — der Tag aus Schritt 3. Genau so, wie
    `docker images notenverwaltung` ihn anzeigt.
@@ -327,99 +337,11 @@ docker logs notenverwaltung-tailscale
 
 ## Schritt 7 — Sicherung einrichten
 
-Nächtlich um 2 Uhr, als Cron-Eintrag auf dem TrueNAS-Host (Systemeinstellungen
-→ Erweitert → Cron-Jobs, oder `crontab -e` als root):
-
-```
-0 2 * * * docker exec notenverwaltung python scripts/backup.py /sicherungen --aufbewahren 14
-```
-
-`docker exec` mit festem Containernamen statt `docker compose exec`: Der
-Cron-Lauf braucht so kein Arbeitsverzeichnis und keinen Pfad zur
-Compose-Datei. Das Skript gibt bei Fehlschlag einen Rückgabewert ≠ 0 zurück,
-damit Cron es meldet.
-
-Gesichert wird über `VACUUM INTO`, nie über eine Dateikopie, und die Kopie
-wird nach dem Schreiben geöffnet und geprüft. Details in `README.md`.
-
-### Wiederherstellung einmal von Hand durchspielen
-
-Abschnitt 2.5 der Spezifikation verlangt das, und zwar **bevor** echte Daten
-im System sind:
-
-```bash
-# Stack in Dockge stoppen, dann:
-cp /mnt/Daten-Z1/apps/notenverwaltung/sicherungen/notenverwaltung-JJJJ-MM-TT-HHMMSS.db \
-   /mnt/Daten-Z1/apps/notenverwaltung/daten/notenverwaltung.db
-chown 1000:1000 /mnt/Daten-Z1/apps/notenverwaltung/daten/notenverwaltung.db
-# Stack wieder starten
-```
-
-Das `cp` ist hier richtig: Die Sicherung ist eine ruhende Datei und die
-Anwendung ist gestoppt. Verboten ist `cp` nur auf die **laufende** Datenbank.
-
-Achten Sie darauf, dass neben der wiederhergestellten Datei keine alten
-`.db-wal`- und `.db-shm`-Dateien liegenbleiben — die gehören zum vorigen
-Stand. Vor dem `cp` entfernen.
-
----
-
-## Aktualisieren auf eine neue Version
-
-Die Reihenfolge ist nicht beliebig: **erst sichern, dann migrieren, dann
-starten.**
-
-```bash
-# 1. Neue Quelle holen und bauen
-cd /mnt/Daten-Z1/apps/notenverwaltung
-git pull
-docker build -t notenverwaltung:2026-09-01 .
-
-# 2. Stack in Dockge stoppen
-
-# 3. Sicherung ziehen -- mit dem ALTEN Image, gegen die unveränderte Datei
-docker run --rm \
-    -v /mnt/Daten-Z1/apps/notenverwaltung/daten:/daten \
-    -v /mnt/Daten-Z1/apps/notenverwaltung/sicherungen:/sicherungen \
-    --entrypoint python \
-    notenverwaltung:2026-08-11 scripts/backup.py /sicherungen
-
-# 4. Migration mit dem NEUEN Image
-docker run --rm \
-    -v /mnt/Daten-Z1/apps/notenverwaltung/daten:/daten \
-    --entrypoint alembic \
-    notenverwaltung:2026-09-01 upgrade head
-
-# 5. Tag in der compose.yaml auf 2026-09-01 ändern, Stack starten
-```
-
-**Der Container migriert nie von selbst.** Ändert eine neue Version das
-Schema, prüft er das beim Start, startet **nicht** und schreibt den Grund ins
-Protokoll (`docker logs notenverwaltung`). Das ist beabsichtigt: Eine
-automatische Migration würde den produktiven Bestand mit Klarnamen und
-Lichtbildern umbauen, ohne dass jemand sie auf einer Kopie durchgespielt hat.
-
-Bei einer Migration, die mehr als eine Spalte hinzufügt, gehört ein Probelauf
-dazu: die frische Sicherung an einen anderen Ort kopieren,
-`NOTENVERWALTUNG_DB` darauf zeigen lassen, migrieren, ansehen — erst dann
-den Migrationsbefehl aus dem Block oben.
-
-### Zurück auf die vorige Version
-
-Solange die Migration **keine** Schemaänderung enthielt: Tag in der
-`compose.yaml` zurückstellen, Stack neu starten. Fertig.
-
-Enthielt sie eine Schemaänderung, genügt das nicht — das alte Programm kann
-mit dem neuen Schema nichts anfangen und verweigert den Start. Dann die
-vorher gezogene Sicherung zurückspielen (siehe „Wiederherstellung") und danach
-den Tag zurückstellen.
-
-Alte Images aufräumen, aber nicht zu früh:
-
-```bash
-docker images notenverwaltung
-docker rmi notenverwaltung:2026-06-01
-```
+Damit ist die Inbetriebnahme fertig. Es fehlt noch der wichtigste
+Dauerbetriebspunkt: der Cron-Eintrag für die nächtliche Sicherung und **die
+einmal von Hand durchgespielte Wiederherstellung**. Beides steht in
+[`betrieb.md`](betrieb.md) — der Wiederherstellungstest gehört gemacht,
+solange noch keine echten Daten in der Datenbank stehen.
 
 ---
 
@@ -431,13 +353,12 @@ docker rmi notenverwaltung:2026-06-01
 | `destination path … already exists and is not an empty directory` | `git clone` in das Dataset, in dem `daten/` und `sicherungen/` liegen | `git init` + `git fetch` statt `clone`, siehe Schritt 2 |
 | `fatal: detected dubious ownership in repository` | Der Arbeitsbaum gehört einem anderen Benutzer als dem, der `git` aufruft | Als `root` weiterarbeiten (`sudo -i`) oder jedem `git` ein `sudo` voranstellen — siehe unten |
 | `unable to open database file` | Verzeichnis gehört nicht UID 1000, oder es fehlt | `chown -R 1000:1000 …` |
-| Container startet nicht, Protokoll nennt eine ausstehende Migration | Neues Image, altes Schema | Migration ausführen (siehe „Aktualisieren") |
+| Container startet nicht, Protokoll nennt eine ausstehende Migration | Neues Image, altes Schema | Migration ausführen, siehe [`betrieb.md`](betrieb.md) |
 | `TS_AUTHKEY fehlt` | `.env` fehlt oder liegt nicht neben der `compose.yaml` | `.env` im Stack-Verzeichnis anlegen |
 | Compose will `notenverwaltung` aus dem Netz ziehen | Tag vertippt, Image nicht vorhanden | `docker images notenverwaltung`, Tag berichtigen |
 | Knoten erscheint nicht im Tailnet | Auth-Key abgelaufen oder verbraucht | Neuen Key erzeugen, `.env` ändern, Stack neu starten |
 | Knoten meldet sich bei **jedem** Neustart neu an | `tailscale/` wird nicht eingehängt oder gehört UID 1000 statt root | Pfad in der Compose-Datei prüfen, `chown -R root:root tailscale` |
 | Stack startet in Dockge nicht, ohne brauchbare Meldung | verschiedene | In der Shell nachstellen, siehe unten |
-| Seite lädt, zeigt aber keine Uhrzeiten | — | Tritt nicht auf; `tzdata` ist im Image fest enthalten |
 
 ### Der Stack startet in Dockge nicht
 
@@ -502,10 +423,14 @@ Was dort typischerweise steht, und was es bedeutet:
 
 | Im Protokoll | Ursache | Abhilfe |
 |---|---|---|
+| **gar nichts**, `docker ps -a` zeigt `Restarting (0)` und als Kommando `"/bin/sh"` | **Das Tailscale-Image ist zu alt.** Ohne `containerboot` startet nur eine Shell, die sofort endet — Rückgabewert 0, kein Protokoll | Aktuelle Version eintragen, siehe Schritt 5 |
 | `invalid key`, `unauthorized`, `key expired` | Auth-Key abgelaufen, schon verbraucht oder falsch kopiert | Neuen Key erzeugen, `.env` ändern, neu deployen |
 | `wgengine`, `tun`, `/dev/net/tun` | Das TUN-Gerät fehlt auf dem Host | `ls -l /dev/net/tun` — fehlt es, `modprobe tun` und den Stack neu deployen |
 | `permission denied` auf `/var/lib/tailscale` | Zustandsverzeichnis gehört nicht root | `chown -R root:root …/tailscale` |
-| gar nichts, Container endet sofort | Image-Tag zeigt auf etwas anderes als erwartet | `docker inspect notenverwaltung-tailscale --format '{{.Config.Image}}'` |
+Der Rückgabewert in `docker ps -a` trennt die Fälle: `Restarting (0)` heißt,
+der Container ist **ordentlich beendet** worden — dann lief kein Dienst, das
+ist der Fall „Image zu alt". Ein Wert ungleich 0 heißt, tailscaled ist
+angelaufen und dann gescheitert; dann steht der Grund im Protokoll.
 
 Solange der Sidecar nicht dauerhaft läuft, ist die zweite Meldung ohne
 Aussagekraft. Erst wenn `docker ps` ihn als `Up` zeigt, lohnt der Blick auf
@@ -536,34 +461,20 @@ Git arbeitet nicht in einem Arbeitsbaum, der einem anderen Benutzer gehört als
 dem, der es aufruft. Der typische Auslöser hier: Schritt 1 (`mkdir`, `chown`)
 lief als `root`, danach wurde als `admin` weitergearbeitet.
 
-Nachgemessen mit git 2.43, damit die Empfehlung nicht auf Vermutung beruht:
-
-| Arbeitsbaum gehört | git läuft als | Ergebnis |
-|---|---|---|
-| `root` | `root` | geht |
-| `root` | `admin` | **Fehler** |
-| `admin` | `admin` | geht |
-| `admin` | `root` (Anmeldung als root) | **Fehler** |
-| `root` oder `admin` | `sudo git …`, aufgerufen von `admin` | geht |
-
-Die letzte Zeile ist der Ausweg: `sudo` setzt `SUDO_UID`, und git akzeptiert
-dann sowohl den aufrufenden Benutzer als auch `root` als Eigentümer.
-
-**Empfehlung:** einmal `sudo -i` und den ganzen Ablauf als `root` machen.
+**Abhilfe:** einmal `sudo -i` und den ganzen Ablauf als `root` machen. Wer als
+`admin` angemeldet bleibt, stellt jedem Befehl `sudo` voran — `sudo` setzt
+`SUDO_UID`, und git akzeptiert dann sowohl den aufrufenden Benutzer als auch
+`root` als Eigentümer (nachgemessen mit git 2.43).
 
 **Was Sie nicht tun sollten:**
 
 - `git config --global --add safe.directory …` — der Vorschlag aus Gits
   Fehlermeldung. Er schaltet die Prüfung ab, statt die Ursache zu beheben,
-  und er gilt **pro Benutzer**: Als `admin` eingetragen, hilft er beim
-  nächsten `sudo git pull` nicht, weil `root` seine eigene Konfiguration
-  liest. Nachgemessen.
+  und gilt **pro Benutzer**: Als `admin` eingetragen, hilft er beim nächsten
+  `sudo git pull` nicht, weil `root` seine eigene Konfiguration liest.
 - `chown -R admin /mnt/Daten-Z1/apps/notenverwaltung` — **das zerstört die
   Rechte auf `daten/` und `sicherungen/`.** Beide müssen UID 1000 gehören,
-  sonst startet der Container zwar, kann aber nicht schreiben. Wenn schon
-  umschreiben, dann ohne `-R` auf dem Elternverzeichnis und mit `-R` nur auf
-  `.git` — und danach `chown -R 1000:1000` auf die beiden Datenverzeichnisse
-  zur Kontrolle wiederholen.
+  sonst startet der Container zwar, kann aber nicht schreiben.
 
 Ist es schon passiert, richtet das den Stand wieder her:
 
@@ -579,35 +490,3 @@ git status --short
 
 ---
 
-## Variante ohne Bauen auf dem NAS
-
-Wenn kein Quellcode auf das NAS soll, bauen Sie auf einem **x86-64**-Rechner
-(Notebook, VM) und übertragen das fertige Image direkt — ohne Registry, ohne
-Konto, ohne öffentliches Artefakt:
-
-```bash
-docker build -t notenverwaltung:2026-08-11 .
-docker save notenverwaltung:2026-08-11 | ssh root@truenas 'docker load'
-```
-
-Alles ab Schritt 4 bleibt unverändert.
-
-Eine Registry (Docker Hub) brauchen Sie für diesen Aufbau nicht. Falls Sie
-später doch eine wollen: privates Repository, und der Build muss auf x86-64
-laufen — nicht auf dem Pi.
-
----
-
-## Was hier bewusst nicht passiert
-
-- **Kein automatisches Update, kein Watchtower.** Ein Image, das sich nachts
-  selbst austauscht, kann bei einer Schemaänderung nur zwei Dinge tun:
-  falsch migrieren oder nicht mehr starten.
-- **Keine automatische Migration beim Start.** Siehe oben.
-- **Kein veröffentlichter Port, kein Reverse Proxy, kein TLS.** Der Zugang
-  läuft ausschließlich über das Tailnet; die Begründung dieser bewussten
-  Abweichung von Abschnitt 2, Punkt 7 steht in `README.md`.
-- **Keine Authentifizierung in der Anwendung.** Wer den Knoten erreicht, darf
-  alles. Die Zugangsbeschränkung liegt in den Tailscale-ACLs. Das ist
-  beabsichtigt und keine Lücke — aber es heißt, dass die ACLs die einzige
-  Grenze sind. Behandeln Sie sie entsprechend.

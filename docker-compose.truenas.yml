@@ -1,7 +1,8 @@
-# Variante für TrueNAS SCALE mit Dockge. Anleitung: TRUENAS.md
+# Variante für TrueNAS SCALE mit Dockge.
+# Anleitung: docs/inbetriebnahme-truenas.md
 #
 # Unterschied zur docker-compose.yml: kein Build-Schritt. Gebaut wird vorher
-# in der Shell (TRUENAS.md, Schritt 3), hier läuft nur noch das fertige
+# in der Shell (Anleitung, Schritt 3), hier läuft nur noch das fertige
 # Image. Dockge startet und stoppt den Stack, mehr nicht.
 #
 # Alle drei Volumes sind absolute Pfade auf dem NAS -- keine benannten
@@ -15,9 +16,15 @@
 
 services:
   tailscale:
-    # Feste Version, nie latest -- sonst tauscht sich der Sidecar unbemerkt
-    # aus. Vorhandene Version ermitteln:
-    #   docker ps --filter ancestor=tailscale/tailscale --format '{{.Image}}'
+    # Beim ersten Mal `latest` eintragen -- das laeuft. Danach die Version
+    # festnageln, damit sich der Sidecar nicht unbemerkt austauscht:
+    #   docker exec notenverwaltung-tailscale tailscale version | head -1
+    # und daraus z. B. tailscale/tailscale:v1.90.2 machen.
+    #
+    # Eine geratene Nummer ist gefaehrlich: Dieser Aufbau setzt voraus, dass
+    # das Image von selbst startet und TS_AUTHKEY auswertet (Programm
+    # `containerboot`). Aeltere Images fuehren nur /bin/sh aus, das sofort
+    # endet -- der Stack laeuft dann nie an.
     image: tailscale/tailscale:VERSION
     container_name: notenverwaltung-tailscale
     hostname: notenverwaltung

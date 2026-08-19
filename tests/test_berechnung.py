@@ -1,7 +1,7 @@
 """Specification 4.6 -- the binding test cases, plus the edge cases it omits.
 
 T-5, T-6 and T-10 are absent: they test point entry and a change of grading
-key, neither of which is built (see README.md).
+key, neither of which is built (see docs/notenlogik.md).
 """
 
 from decimal import Decimal

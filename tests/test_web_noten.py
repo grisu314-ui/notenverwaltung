@@ -5,7 +5,7 @@ record after the commit, and a refused entry stores nothing and says so.
 
 What they cannot prove: what the browser shows when the connection drops
 mid-request. That is exactly the case the requirement is about, and it is
-covered by the manual acceptance run documented in README.md.
+covered by the manual acceptance run documented in docs/betrieb.md.
 """
 
 from decimal import Decimal
