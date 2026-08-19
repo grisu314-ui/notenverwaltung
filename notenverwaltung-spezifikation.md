@@ -252,17 +252,13 @@ Schuljahre, Halbjahre, Klassen, Kurse, Notengruppen mit Gewichten, Kursteilnahme
 
 Zweck: Die Lehrkraft sieht während des Unterrichts, **wer wo sitzt** — mit Foto und Namen, in derselben Darstellung wie die Klassenansicht (5.1). Ein Sitzplan ist eine *Ansicht auf Schüler*. Er trägt keine Note ein, verändert keine und zeigt keine.
 
-**Bezugsobjekt ist die Klasse.** Ein Sitzplan gehört zu genau einer Klasse und zeigt deren **aktive** Schüler. Es gibt keinen Kursbezug und keinen Kursfilter: Wird eine Klasse in einem Kurs unterrichtet, den nur ein Teil ihrer Schüler besucht (3.1, Kursteilnahme), zeigt der Plan trotzdem alle. Er bildet den Raum ab, nicht die Teilnehmerliste.
+**Genau ein Sitzplan je Klasse.** Er gehört zu genau einer Klasse, trägt keine eigene Bezeichnung — er heißt wie seine Klasse — und ist aus der Klassenansicht mit einem Tipper erreichbar. Es gibt keine Auswahlliste, keinen zweiten Plan für einen anderen Raum und **keine gesonderte Klausurordnung**.
 
-#### Mehrere Pläne je Klasse
-
-Eine Klasse kann mehrere Sitzpläne haben, jeder mit einer eigenen Bezeichnung — etwa „Raum 214" und „Klausurordnung". Verschiedene Räume haben verschiedene Sitzordnungen, und eine Klausurordnung soll nicht vor und nach jeder Klausur von Hand wiederhergestellt werden müssen.
-
-Hat eine Klasse genau einen Plan — der Regelfall —, führt der Einstieg aus der Klassenansicht unmittelbar in diesen Plan. Hat sie mehrere, führt er auf eine Auswahlliste. Es gibt **kein** Standardkennzeichen und keine Merkfunktion für den zuletzt geöffneten Plan.
+Er zeigt die **aktiven** Schüler der Klasse. Es gibt keinen Kursbezug und keinen Kursfilter: Wird eine Klasse in einem Kurs unterrichtet, den nur ein Teil ihrer Schüler besucht (3.1, Kursteilnahme), zeigt der Plan trotzdem alle. Er bildet den Raum ab, nicht die Teilnehmerliste.
 
 #### Der Raum
 
-Der Plan ist ein **Raster aus Reihen und Sitzen je Reihe**. Beide Zahlen sind je Plan und unabhängig voneinander einstellbar; die Vorgabe beim Anlegen ist **5 Reihen zu je 6 Sitzen**.
+Der Plan ist ein **Raster aus Reihen und Sitzen je Reihe**. Beide Zahlen sind unabhängig voneinander einstellbar, jeweils **1 bis 12**; die Vorgabe ist **5 Reihen zu je 6 Sitzen**. Die obere Schranke schützt vor Vertippern, sie ist keine Aussage über einen Raum.
 
 - Die **Tafel liegt immer oben** und ist als solche beschriftet. Es gibt keine Drehung und keine Umschaltung der Blickrichtung: Ein Plan ohne feststehende Blickrichtung wird im Unterricht falsch gelesen.
 - Jeder Platz ist über Reihe und Position eindeutig bezeichnet.
@@ -272,7 +268,7 @@ Der Plan ist ein **Raster aus Reihen und Sitzen je Reihe**. Beide Zahlen sind je
 #### Belegung
 
 - Ein Platz trägt **höchstens einen** Schüler. Ein Doppeltisch sind zwei Plätze nebeneinander, nicht ein Platz mit zwei Personen.
-- Ein Schüler sitzt in einem Plan auf **höchstens einem** Platz. In verschiedenen Plänen derselben Klasse sitzt er unabhängig davon.
+- Ein Schüler sitzt auf **höchstens einem** Platz.
 - **Leere Plätze sind der Normalfall**, kein Fehler.
 - Schüler ohne Platz stehen in einer Liste unterhalb des Plans, überschrieben mit ihrer Anzahl. Diese Liste ist sichtbar, sobald sie nicht leer ist. Damit kann ein neu angelegter Schüler nicht übersehen werden, und der Plan erweckt nie den Eindruck, vollständig zu sein, während jemand fehlt.
 
@@ -295,7 +291,7 @@ Einen Export in ein Dateiformat gibt es nicht — kein PDF, kein XLSX. Der Ausdr
 
 #### Lebensdauer
 
-Ein Sitzplan hängt an der Klasse und damit an deren Schuljahr (3.1). Er bleibt innerhalb des Schuljahres bestehen und wird mit der Klasse oder dem Schuljahr gelöscht. Es gibt **keinen Übertrag** in ein Folgejahr und **keine Kopierfunktion** zwischen Plänen: Ein neues Schuljahr bedeutet eine neue Klasse und meist einen anderen Raum.
+Der Sitzplan hängt an der Klasse und damit an deren Schuljahr (3.1). Er bleibt innerhalb des Schuljahres bestehen und wird mit der Klasse oder dem Schuljahr gelöscht. Es gibt **keinen Übertrag** in ein Folgejahr: Ein neues Schuljahr bedeutet eine neue Klasse und meist einen anderen Raum.
 
 #### Schüler, die inaktiv werden oder gelöscht werden
 
@@ -310,8 +306,9 @@ Das Deaktivieren ist in dieser Anwendung durchgängig die *umkehrbare* Alternati
 
 - **Keine Anwesenheiten, keine Fehlzeiten.** Das ist und bleibt ein Nicht-Ziel (1). Ein Sitzplan lädt dazu ein; er ist dafür nicht der Einstieg.
 - **Keine Noteneingabe und keine Notenanzeige im Plan.** Der Weg zur Note führt über die Serieneingabe (5.4).
+- Kein zweiter Plan je Klasse, keine Klausurordnung, kein Duplizieren.
 - Keine frei platzierbaren Tische, kein Zoom, kein Ziehen.
-- Kein Übertrag zwischen Schuljahren, kein Duplizieren eines Plans.
+- Kein Übertrag zwischen Schuljahren.
 
 ---
 
@@ -404,10 +401,11 @@ die in keiner früheren Fassung stand und noch nicht gebaut ist:
 
 | Abschnitt | Änderung | Grund |
 |---|---|---|
-| 5.6 | **Sitzplan neu aufgenommen** — je Klasse ein oder mehrere benannte Raster aus Reihen und Sitzen, Vorgabe 5 × 6, mit Foto und Namen wie in der Klassenansicht | Wunsch des Betreibers: im Unterricht sehen, wer wo sitzt. Der Abschnitt beschreibt den Soll-Stand und ist als noch nicht umgesetzt gekennzeichnet |
+| 5.6 | **Sitzplan neu aufgenommen** — **genau einer je Klasse**, ein Raster aus Reihen und Sitzen (je 1 bis 12, Vorgabe 5 × 6), mit Foto und Namen wie in der Klassenansicht | Wunsch des Betreibers: im Unterricht sehen, wer wo sitzt. Der Abschnitt beschreibt den Soll-Stand und ist als noch nicht umgesetzt gekennzeichnet |
 | 5.6 | Bezugsobjekt ist die **Klasse**, nicht der Kurs; kein Kursfilter | Entscheidung des Betreibers. Der Plan bildet den Raum ab, nicht die Teilnehmerliste |
 | 5.6 | Zuweisung in zwei Tippern, **kein Ziehen**; getrennter Bearbeitungsmodus | Maßstab ist das einhändig gehaltene Telefon (10). Ziehen ist so nicht bedienbar und bestimmt damit auch die Rasterform des Raums |
 | 5.6 | Drucken **mit Fotos**, kein Dateiexport | Entscheidung des Betreibers; ohne Fotos hat der Ausdruck für den Zweck zu wenig Wert. Der Ausdruck liegt außerhalb der Reichweite der Löschfunktion (11) |
+| 5.6 | Ein zweiter Plan je Klasse, eine gesonderte Klausurordnung und ein Planname ausdrücklich ausgeschlossen | Entscheidung des Betreibers: gebraucht wird eine Sitzordnung je Klasse, sonst nichts. Der Plan heißt wie seine Klasse |
 | 5.6 | Anwesenheiten und Noteneingabe im Plan ausdrücklich ausgeschlossen | Anwesenheiten sind ein Nicht-Ziel (1); ein Sitzplan lädt dazu ein, sie doch mitzuerfassen |
 
 ---
