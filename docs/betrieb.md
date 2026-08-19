@@ -67,14 +67,31 @@ eigenem Tailnet-Namen. Damit lässt sich eine neue Version vollständig
 ausprobieren, ohne den laufenden Betrieb oder den echten Datenbestand zu
 berühren.
 
+**Der Test bekommt einen eigenen Quellbaum.** Der produktive bleibt auf `main`
+und wird nicht auf einen Zweig umgestellt: Er liegt eine Ebene über `daten/`
+und `sicherungen/`, und die nächste Version soll von dort aus gebaut werden
+können, ohne dass jemand erst den Zweig zurückstellen muss.
+
 ```bash
-sudo mkdir -p /mnt/Daten-Z1/apps/notenverwaltung-dev/{daten,sicherungen,tailscale}
-sudo chown -R 1000:1000 /mnt/Daten-Z1/apps/notenverwaltung-dev/{daten,sicherungen}
+sudo git clone https://github.com/grisu314-ui/notenverwaltung.git \
+    /mnt/Daten-Z1/apps/notenverwaltung-dev
+cd /mnt/Daten-Z1/apps/notenverwaltung-dev
+sudo git checkout ZU-TESTENDER-ZWEIG
+
+sudo mkdir -p daten sicherungen tailscale
+sudo chown -R 1000:1000 daten sicherungen
 # tailscale/ gehört root -- tailscaled läuft im Container als root
+
+docker build -t notenverwaltung:TEST-TAG .
 ```
 
-Das dritte Verzeichnis wird leicht vergessen: Es steht als Volume in der
-`compose.yaml` und nimmt den Knotenzustand des Sidecars auf.
+Damit sieht der Testbaum genauso aus wie der produktive: Quellbaum in der
+Wurzel, `daten/`, `sicherungen/` und `tailscale/` darunter. Das dritte
+Verzeichnis wird leicht vergessen — es steht als Volume in der `compose.yaml`
+und nimmt den Knotenzustand des Sidecars auf.
+
+Die Datenverzeichnisse stehen in `.dockerignore`; das Image enthält nie eine
+Datenbank, gleich aus welchem Baum gebaut wird.
 
 ### Was gegenüber dem produktiven Stack anders sein muss
 
@@ -106,15 +123,14 @@ Zwei verschiedene Fragen, zwei verschiedene Wege:
 Platzhalterbildern. Das Skript bricht ab, wenn die Datenbank nicht leer ist.
 
 ```bash
-cd /mnt/Daten-Z1/apps/notenverwaltung-dev
 docker run --rm \
     -v /mnt/Daten-Z1/apps/notenverwaltung-dev/daten:/daten \
     --entrypoint alembic \
-    notenverwaltung:NEUER-TAG upgrade head
+    notenverwaltung:TEST-TAG upgrade head
 docker run --rm \
     -v /mnt/Daten-Z1/apps/notenverwaltung-dev/daten:/daten \
     --entrypoint python \
-    notenverwaltung:NEUER-TAG scripts/seed_dev.py
+    notenverwaltung:TEST-TAG scripts/seed_dev.py
 ```
 
 *Läuft die Migration auf meinem echten Bestand?* — mit einer Kopie, gezogen
@@ -140,6 +156,7 @@ starten.** Bei einer Version mit Schemaänderung vorher den vorigen Abschnitt
 durchlaufen — einmal in der Testumgebung, gegen eine Kopie.
 
 ```bash
+# der produktive Quellbaum, auf main
 cd /mnt/Daten-Z1/apps/notenverwaltung
 git pull
 docker build -t notenverwaltung:$(date +%Y-%m-%d) .
