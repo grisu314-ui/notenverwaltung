@@ -10,13 +10,13 @@ Neuaufbau von Grund auf: `inbetriebnahme-truenas.md`.
 Läuft nächtlich per Cron:
 
 ```
-0 2 * * * docker exec notenverwaltung python scripts/backup.py /sicherungen --aufbewahren 14
+0 2 * * * docker exec notenverwaltung python scripts/backup.py /sicherungen --aufbewahren 31
 ```
 
 Von Hand anstoßen:
 
 ```bash
-docker exec notenverwaltung python scripts/backup.py /sicherungen --aufbewahren 14
+docker exec notenverwaltung python scripts/backup.py /sicherungen --aufbewahren 31
 ```
 
 Das Skript verwendet **`VACUUM INTO`**, nie eine Dateikopie, öffnet die Quelle
@@ -29,7 +29,7 @@ einem Fehlschlag ist der Rückgabewert ungleich 0, damit Cron es meldet.
 > Tabelle vollständig fehlte. Nachgestellt in `tests/test_backup.py`.
 
 Ergebnis sind Dateien `notenverwaltung-JJJJ-MM-TT-HHMMSS.db` in
-`/mnt/Daten-Z1/apps/notenverwaltung/sicherungen`. Ältere als die letzten 14
+`/mnt/Daten-Z1/apps/notenverwaltung/sicherungen`. Ältere als die letzten 31
 werden entfernt.
 
 Gelegentlich nachsehen, dass dort frische Dateien liegen. Eine Sicherung, die

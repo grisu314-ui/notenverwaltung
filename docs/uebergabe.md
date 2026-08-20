@@ -76,7 +76,7 @@ Dateisystem, keine externen Dienste. Fotos liegen als BLOB in derselben Datei
 
 | Wann | Was | Wer |
 |---|---|---|
-| täglich, automatisch | Cron zieht um 2 Uhr eine Sicherung, 14 Stände Aufbewahrung | — |
+| täglich, automatisch | Cron zieht um 2 Uhr eine Sicherung, 31 Stände Aufbewahrung | — |
 | gelegentlich | prüfen, dass in `sicherungen/` frische Dateien liegen | Betreiber |
 | bei jeder neuen Version | **erst sichern, dann migrieren, dann starten** | Betreiber |
 | ein- bis zweimal im Jahr | Abhängigkeiten aktualisieren, Tests laufen lassen | Assistent, dann Betreiber |
