@@ -13,7 +13,27 @@ from app.services.sorting import anzeigename, namensschluessel, vereinfacht
 
 VERZEICHNIS = Path(__file__).resolve().parent
 
+
+def _statikversion() -> str:
+    """Cache-busting token, from the newest file under ``static/``.
+
+    Without it a browser keeps the stylesheet it already has. Observed on a
+    phone that had used the application for weeks: after the seating plan was
+    deployed it rendered as a bare nested list, because a free seat is an
+    empty element whose whole visible form comes from CSS that the browser
+    never re-fetched.
+
+    Computed once at import; the files do not change while the process runs.
+    """
+    dateien = (VERZEICHNIS / "static").glob("*")
+    neueste = max((d.stat().st_mtime for d in dateien if d.is_file()), default=0.0)
+    return str(int(neueste))
+
+
+STATIKVERSION = _statikversion()
+
 templates = Jinja2Templates(directory=VERZEICHNIS / "templates")
+templates.env.globals["statikversion"] = STATIKVERSION
 templates.env.filters["anzeigename"] = anzeigename
 # 0.7 is shown as "1+", never as "0,7" (specification 4.1).
 templates.env.filters["note_anzeige"] = als_anzeige
