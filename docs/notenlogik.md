@@ -64,6 +64,14 @@ Gruppe zählt mehr als eine in einer mit 30 gewichteten.
 Nebenbei trifft die einstufige Rechnung den in Testfall T-1 geforderten
 Erwartungswert 2,00 exakt — die zweistufige tut das nicht.
 
+**Das Gruppengewicht ist ein Faktor je Note, kein Budget der Gruppe.** Jede
+Klassenarbeit geht mit `70 × 1,0` ein, die dritte wie die erste; wer vier
+schreibt, hat 280 aus Klassenarbeiten statt 210. Daraus folgt die Vorgabe
+`Mitarbeit 3` für neue Kurse (Spezifikation 3.1): Mitarbeitsnoten entstehen
+einzeln über das Halbjahr, und ein Gewicht in der Größenordnung der anderen
+Gruppen machte sie zur schwersten Position im Zeugnis. Nachgerechnet in
+`tests/test_mitarbeitsnote.py`.
+
 **Eine leere Notengruppe hat kein Gewicht.** Sie taucht weder im Zähler noch
 im Nenner auf; die in der Spezifikation beschriebene Normalisierung braucht
 dafür keinen eigenen Code.

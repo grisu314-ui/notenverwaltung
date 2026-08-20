@@ -193,6 +193,19 @@ def _sichtbarer_schueler(platz: Sitzplatz | None) -> Schueler | None:
     return platz.schueler
 
 
+def schueler_auf_platz(
+    session: Session, sitzplan: Sitzplan, reihe: int, position: int
+) -> Schueler | None:
+    """Who is sitting there now -- active pupils only, as the plan draws it.
+
+    The caller of a seat action reads the pupil from here rather than from
+    the form, so what is stored is who sits there now, not who sat there when
+    the page was rendered.
+    """
+    platz = _belegung(session, sitzplan).get((reihe, position))
+    return _sichtbarer_schueler(platz)
+
+
 def setze_platz(
     session: Session, sitzplan: Sitzplan, reihe: int, position: int, schueler: Schueler
 ) -> Sitzplatz:

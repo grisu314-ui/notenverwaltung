@@ -26,6 +26,7 @@
       <input type="hidden" name="von_position" value="{{ auswahl.position }}">
       <input type="hidden" name="nach_reihe" value="{{ platz.reihe }}">
       <input type="hidden" name="nach_position" value="{{ platz.position }}">
+      {% if kurs %}<input type="hidden" name="kurs" value="{{ kurs.id }}">{% endif %}
       <button type="submit" class="platz {{ 'belegt' if platz.schueler else 'leer' }}">
         {% if platz.schueler %}
           {% with s = platz.schueler %}{% include "_sitzbild.html" %}{% endwith %}
@@ -39,8 +40,8 @@
 {% else %}
   {% set ziel = "menu" if platz.schueler else "zuweisen" %}
   <a class="platz {{ 'belegt' if platz.schueler else 'leer' }}{% if auswahl and auswahl.reihe == platz.reihe and auswahl.position == platz.position %} gewaehlt{% endif %}"
-     href="{{ adresse }}?modus={{ ziel }}&amp;reihe={{ platz.reihe }}&amp;position={{ platz.position }}"
-     hx-get="{{ adresse }}/raster?modus={{ ziel }}&amp;reihe={{ platz.reihe }}&amp;position={{ platz.position }}"
+     href="{{ adresse }}?modus={{ ziel }}&amp;reihe={{ platz.reihe }}&amp;position={{ platz.position }}{% if kurs %}&amp;kurs={{ kurs.id }}{% endif %}"
+     hx-get="{{ adresse }}/raster?modus={{ ziel }}&amp;reihe={{ platz.reihe }}&amp;position={{ platz.position }}{% if kurs %}&amp;kurs={{ kurs.id }}{% endif %}"
      hx-target="#sitzplan" hx-swap="outerHTML">
     {% if platz.schueler %}
       {% with s = platz.schueler %}{% include "_sitzbild.html" %}{% endwith %}

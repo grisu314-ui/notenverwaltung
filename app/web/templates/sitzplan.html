@@ -4,12 +4,29 @@
   <p><a href="/klassen/{{ klasse.id }}">← {{ klasse.bezeichnung }}</a></p>
   <h1>Sitzplan {{ klasse.bezeichnung }}</h1>
 
+  {# The course of the current lesson. The plan belongs to a class, a grade
+     belongs to a course; this is what bridges the two (5.6). #}
+  {% if kurse %}
+    <form method="get" action="/klassen/{{ klasse.id }}/sitzplan" class="kurswahl">
+      <input type="hidden" name="modus" value="{{ modus }}">
+      <label>Kurs
+        <select name="kurs" onchange="this.form.submit()">
+          <option value="">— kein Kurs gewählt —</option>
+          {% for k in kurse %}
+            <option value="{{ k.id }}"{% if kurs and k.id == kurs.id %} selected{% endif %}>{{ k.fach }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <noscript><button type="submit">Übernehmen</button></noscript>
+    </form>
+  {% endif %}
+
   <div class="sitzkopf">
-    {% if modus == "ansicht" %}
-      <a class="schaltflaeche" href="/klassen/{{ klasse.id }}/sitzplan?modus=bearbeiten">Plätze bearbeiten</a>
+        {% if modus == "ansicht" %}
+      <a class="schaltflaeche" href="/klassen/{{ klasse.id }}/sitzplan?modus=bearbeiten{% if kurs %}&amp;kurs={{ kurs.id }}{% endif %}">Plätze bearbeiten</a>
       <button type="button" onclick="window.print()">Drucken</button>
     {% else %}
-      <a class="schaltflaeche" href="/klassen/{{ klasse.id }}/sitzplan?modus=ansicht">Fertig</a>
+      <a class="schaltflaeche" href="/klassen/{{ klasse.id }}/sitzplan?modus=ansicht{% if kurs %}&amp;kurs={{ kurs.id }}{% endif %}">Fertig</a>
     {% endif %}
   </div>
 

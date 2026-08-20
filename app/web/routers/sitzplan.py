@@ -6,22 +6,35 @@ yardstick is a phone held in one hand (10).
 
 Every state of the interface is a mode in the URL, and every mode renders the
 same fragment. There is no client-side state to get out of step with the
-database, and each of the four modes works without JavaScript as well: the
-seats carry an ``href`` next to their ``hx-get``.
+database, and every mode works without JavaScript as well: the seats carry an
+``href`` next to their ``hx-get``.
+
+The course travels in the URL for the same reason. The plan belongs to a
+class, a grade belongs to a course, and the chosen course is what bridges the
+two for the participation grade of the day (5.6). Without one the plan simply
+does not offer it.
 """
 
 import logging
+from decimal import Decimal, InvalidOperation
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.db.models import Klasse, Schueler
+from app.clock import heute_lokal
+from app.db.models import Klasse, Kurs, Schueler
+from app.grading.notenwert import (
+    NOTENWERTE,
+    UngueltigeNoteError,
+    als_anzeige,
+    pruefe_notenwert,
+)
 from app.services import sitzplan as dienst
-from app.services.fehler import uebersetzte_datenbankfehler
+from app.services.fehler import Verwaltungsfehler, uebersetzte_datenbankfehler
 from app.services.settings import lies_einstellungen
 from app.web.dependencies import datenbanksitzung
-from app.web.gemeinsam import hole, templates
+from app.web.gemeinsam import hole, sortiert_nach_bezeichnung, templates
 
 logger = logging.getLogger(__name__)
 
@@ -33,11 +46,50 @@ MODUS_BEARBEITEN = "bearbeiten"
 MODUS_ZUWEISEN = "zuweisen"
 MODUS_MENU = "menu"
 MODUS_TAUSCHEN = "tauschen"
-MODI = (MODUS_ANSICHT, MODUS_BEARBEITEN, MODUS_ZUWEISEN, MODUS_MENU, MODUS_TAUSCHEN)
+MODUS_MITARBEIT = "mitarbeit"
+MODI = (
+    MODUS_ANSICHT,
+    MODUS_BEARBEITEN,
+    MODUS_ZUWEISEN,
+    MODUS_MENU,
+    MODUS_TAUSCHEN,
+    MODUS_MITARBEIT,
+)
 
 # The modes that need a selected seat. Without one they fall back to the plain
 # edit mode instead of rendering a panel about nothing.
-MODI_MIT_AUSWAHL = (MODUS_ZUWEISEN, MODUS_MENU, MODUS_TAUSCHEN)
+MODI_MIT_AUSWAHL = (MODUS_ZUWEISEN, MODUS_MENU, MODUS_TAUSCHEN, MODUS_MITARBEIT)
+
+
+def als_notenwert(wert: str) -> Decimal:
+    """One select value as a grade, or a refusal. Never a guess."""
+    try:
+        return pruefe_notenwert(Decimal(wert.strip()))
+    except (InvalidOperation, UngueltigeNoteError) as fehler:
+        raise Verwaltungsfehler(
+            f"\u201e{wert}\u201c ist keine g\u00fcltige Note."
+        ) from fehler
+
+
+def notenauswahl() -> list[tuple[str, str]]:
+    """The sixteen values for the participation grade (4.1).
+
+    No "nicht gewertet" and no "nicht erbracht": a participation grade is
+    always counted, because there is no performance somebody failed to
+    deliver (5.6).
+    """
+    return [(str(wert), als_anzeige(wert)) for wert in NOTENWERTE]
+
+
+def _gewaehlter_kurs(session: Session, klasse: Klasse, kurs_id: int | None) -> Kurs | None:
+    """The course of the current lesson, or None while none is chosen."""
+    if kurs_id is None:
+        return None
+    kurs = session.get(Kurs, kurs_id)
+    if kurs is None or kurs.klasse_id != klasse.id:
+        # A link from another class, or a course that has since been deleted.
+        return None
+    return kurs
 
 
 def _umfeld(
@@ -47,6 +99,8 @@ def _umfeld(
     reihe: int | None,
     position: int | None,
     gerade_gespeichert: bool = False,
+    kurs_id: int | None = None,
+    meldung: str | None = None,
 ) -> dict:
     """Context for the fragment; the page template uses the same keys."""
     if modus not in MODI:
@@ -61,13 +115,22 @@ def _umfeld(
         # The grid shrank under a link that is still open somewhere.
         modus = MODUS_BEARBEITEN
 
+    kurs = _gewaehlter_kurs(session, klasse, kurs_id)
+    if modus == MODUS_MITARBEIT and (kurs is None or gewaehlt is None or gewaehlt.ist_frei):
+        modus = MODUS_BEARBEITEN
+
     return {
         "klasse": klasse,
         "blatt": blatt,
         "modus": modus,
         "auswahl": gewaehlt,
+        "kurs": kurs,
+        "kurse": sortiert_nach_bezeichnung(klasse.kurse, "fach"),
+        "notenauswahl": notenauswahl(),
+        "heute": heute_lokal(),
         "einstellungen": lies_einstellungen(session),
         "gerade_gespeichert": gerade_gespeichert,
+        "meldung": meldung,
     }
 
 
@@ -97,11 +160,12 @@ def seite(
     modus: str = MODUS_ANSICHT,
     reihe: int | None = None,
     position: int | None = None,
+    kurs: int | None = None,
     session: Session = Depends(datenbanksitzung),
 ):
     """The whole page. Also the fallback for a browser without JavaScript."""
     klasse = hole(session, Klasse, klasse_id)
-    umfeld = _umfeld(session, klasse, modus, reihe, position)
+    umfeld = _umfeld(session, klasse, modus, reihe, position, kurs_id=kurs)
     session.commit()  # the plan may have been created by this very request
     return templates.TemplateResponse(
         request=request, name="sitzplan.html", context=umfeld
@@ -115,11 +179,12 @@ def raster(
     modus: str = MODUS_BEARBEITEN,
     reihe: int | None = None,
     position: int | None = None,
+    kurs: int | None = None,
     session: Session = Depends(datenbanksitzung),
 ):
     """Just the grid and its panel -- the answer to every tap on a seat."""
     klasse = hole(session, Klasse, klasse_id)
-    umfeld = _umfeld(session, klasse, modus, reihe, position)
+    umfeld = _umfeld(session, klasse, modus, reihe, position, kurs_id=kurs)
     session.commit()
     return _fragment(request, umfeld)
 
@@ -131,6 +196,7 @@ def zuweisen(
     reihe: int,
     position: int,
     schueler_id: int = Form(...),
+    kurs: int | None = Form(None),
     session: Session = Depends(datenbanksitzung),
 ):
     klasse = hole(session, Klasse, klasse_id)
@@ -140,7 +206,8 @@ def zuweisen(
         dienst.setze_platz(session, sitzplan, reihe, position, schueler)
         session.commit()
     return _fragment(
-        request, _umfeld(session, klasse, MODUS_BEARBEITEN, None, None, True)
+        request,
+        _umfeld(session, klasse, MODUS_BEARBEITEN, None, None, True, kurs_id=kurs),
     )
 
 
@@ -150,6 +217,7 @@ def raeumen(
     klasse_id: int,
     reihe: int,
     position: int,
+    kurs: int | None = Form(None),
     session: Session = Depends(datenbanksitzung),
 ):
     klasse = hole(session, Klasse, klasse_id)
@@ -158,7 +226,8 @@ def raeumen(
         dienst.raeume_platz(session, sitzplan, reihe, position)
         session.commit()
     return _fragment(
-        request, _umfeld(session, klasse, MODUS_BEARBEITEN, None, None, True)
+        request,
+        _umfeld(session, klasse, MODUS_BEARBEITEN, None, None, True, kurs_id=kurs),
     )
 
 
@@ -170,6 +239,7 @@ def tauschen(
     von_position: int = Form(...),
     nach_reihe: int = Form(...),
     nach_position: int = Form(...),
+    kurs: int | None = Form(None),
     session: Session = Depends(datenbanksitzung),
 ):
     klasse = hole(session, Klasse, klasse_id)
@@ -180,7 +250,64 @@ def tauschen(
         )
         session.commit()
     return _fragment(
-        request, _umfeld(session, klasse, MODUS_BEARBEITEN, None, None, True)
+        request,
+        _umfeld(session, klasse, MODUS_BEARBEITEN, None, None, True, kurs_id=kurs),
+    )
+
+
+@router.post("/platz/{reihe}/{position}/mitarbeit", response_class=HTMLResponse)
+def mitarbeitsnote(
+    request: Request,
+    klasse_id: int,
+    reihe: int,
+    position: int,
+    kurs: int = Form(...),
+    notenwert: str = Form(...),
+    notiz: str = Form(""),
+    session: Session = Depends(datenbanksitzung),
+):
+    """The one grade the seating plan writes (5.6).
+
+    The pupil comes from the seat, not from the form: what is stored has to be
+    who is sitting there now, not who was there when the page was rendered.
+    """
+    klasse = hole(session, Klasse, klasse_id)
+    gewaehlter_kurs = _gewaehlter_kurs(session, klasse, kurs)
+    if gewaehlter_kurs is None:
+        raise Verwaltungsfehler(
+            "Für diese Klasse ist kein Kurs gewählt. Bitte oben den Kurs "
+            "auswählen, in dem gerade unterrichtet wird."
+        )
+
+    with uebersetzte_datenbankfehler(session):
+        sitzplan = dienst.hole_oder_lege_an(session, klasse)
+        schueler = dienst.schueler_auf_platz(session, sitzplan, reihe, position)
+        if schueler is None:
+            raise Verwaltungsfehler(
+                f"Auf Reihe {reihe}, Platz {position} sitzt niemand. "
+                "Bitte die Seite neu laden."
+            )
+        note = dienst.mitarbeitsnote(
+            session, gewaehlter_kurs, schueler, als_notenwert(notenwert), notiz
+        )
+        session.commit()
+
+    meldung = (
+        f"Mitarbeitsnote {als_anzeige(note.notenwert)} für "
+        f"{schueler.vorname} {schueler.nachname} in {gewaehlter_kurs.fach}"
+    )
+    return _fragment(
+        request,
+        _umfeld(
+            session,
+            klasse,
+            MODUS_BEARBEITEN,
+            None,
+            None,
+            True,
+            kurs_id=kurs,
+            meldung=meldung,
+        ),
     )
 
 

@@ -206,8 +206,9 @@ def test_ein_platz_ausserhalb_des_rasters_faellt_auf_die_bearbeitung_zurueck(
     assert "Reihe 99" not in antwort.text
 
 
-def test_der_sitzplan_fasst_keine_note_an(client, session, graph):
-    """Specification 5.6: a view onto pupils, never a way into a grade."""
+def test_das_umsetzen_laesst_jede_note_in_ruhe(client, session, graph):
+    """Seating is seating. The one grade the plan writes is the participation
+    grade, and it takes a chosen course and an explicit entry (5.6)."""
     vorher = graph.note.notenwert
 
     client.post(
@@ -217,6 +218,167 @@ def test_der_sitzplan_fasst_keine_note_an(client, session, graph):
 
     session.refresh(graph.note)
     assert graph.note.notenwert == vorher
-    # No way into the grade entry from here, and no grade on the page.
+    # No grades on the plan and no way into the serial entry from here.
     assert "/leistungen/" not in seite.text
-    assert "<select" not in seite.text
+
+
+# ---------------------------------------------------------------------------
+# The participation grade of the day (5.6)
+# ---------------------------------------------------------------------------
+
+
+def _kurs_mit_vorgabegruppen(session, graph):
+    from app.services import verwaltung
+
+    kurs = verwaltung.lege_kurs_an(session, graph.klasse, "Politik")
+    session.commit()
+    return kurs
+
+
+def _setze(client, graph, reihe, position, schueler, kurs=None):
+    daten = {"schueler_id": schueler.id}
+    if kurs is not None:
+        daten["kurs"] = kurs.id
+    return client.post(
+        f"{url(graph)}/platz/{reihe}/{position}", data=daten, headers=HTMX
+    )
+
+
+def test_die_seite_bietet_die_kurse_der_klasse_an(client, session, graph):
+    _kurs_mit_vorgabegruppen(session, graph)
+
+    antwort = client.get(url(graph))
+
+    assert "kein Kurs gewählt" in antwort.text
+    assert "Politik" in antwort.text
+
+
+def test_ohne_kurs_gibt_es_keine_mitarbeitsnote(client, session, graph):
+    _kurs_mit_vorgabegruppen(session, graph)
+    _setze(client, graph, 1, 1, graph.schueler_a)
+
+    antwort = client.get(
+        f"{url(graph)}/raster",
+        params={"modus": "menu", "reihe": 1, "position": 1},
+        headers=HTMX,
+    )
+
+    # The hint mentions it, the menu does not offer it.
+    assert "modus=mitarbeit" not in antwort.text
+    assert "oben den Kurs wählen" in antwort.text
+
+
+def test_mit_kurs_bietet_der_platz_die_mitarbeitsnote_an(client, session, graph):
+    kurs = _kurs_mit_vorgabegruppen(session, graph)
+    _setze(client, graph, 1, 1, graph.schueler_a, kurs)
+
+    antwort = client.get(
+        f"{url(graph)}/raster",
+        params={"modus": "menu", "reihe": 1, "position": 1, "kurs": kurs.id},
+        headers=HTMX,
+    )
+
+    assert "Mitarbeitsnote" in antwort.text
+    assert "modus=mitarbeit" in antwort.text
+
+
+def test_die_eingabemaske_zeigt_die_sechzehn_noten_und_ein_notizfeld(
+    client, session, graph
+):
+    kurs = _kurs_mit_vorgabegruppen(session, graph)
+    _setze(client, graph, 1, 1, graph.schueler_a, kurs)
+
+    antwort = client.get(
+        f"{url(graph)}/raster",
+        params={"modus": "mitarbeit", "reihe": 1, "position": 1, "kurs": kurs.id},
+        headers=HTMX,
+    )
+
+    for beschriftung in ("1+", "2−", "6"):
+        assert f">{beschriftung}</option>" in antwort.text
+    assert 'name="notiz"' in antwort.text
+    # A participation grade is always counted (5.6).
+    assert "nicht erbracht" not in antwort.text
+
+
+def test_eine_mitarbeitsnote_wird_gespeichert_und_bestaetigt(client, session, graph):
+    from app.db.models import Note
+
+    kurs = _kurs_mit_vorgabegruppen(session, graph)
+    _setze(client, graph, 1, 1, graph.schueler_a, kurs)
+
+    antwort = client.post(
+        f"{url(graph)}/platz/1/1/mitarbeit",
+        data={"kurs": kurs.id, "notenwert": "1.0", "notiz": "Trug die Diskussion."},
+        headers=HTMX,
+    )
+
+    assert antwort.status_code == 200
+    assert "gespeichert" in antwort.text
+    assert "Öztürk" in antwort.text
+    note = (
+        session.query(Note)
+        .filter(Note.schueler_id == graph.schueler_a.id, Note.notiz.isnot(None))
+        .one()
+    )
+    assert note.notiz == "Trug die Diskussion."
+
+
+def test_eine_mitarbeitsnote_auf_einen_leeren_platz_wird_abgewiesen(
+    client, session, graph
+):
+    kurs = _kurs_mit_vorgabegruppen(session, graph)
+
+    antwort = client.post(
+        f"{url(graph)}/platz/1/1/mitarbeit",
+        data={"kurs": kurs.id, "notenwert": "1.0"},
+        headers=HTMX,
+    )
+
+    assert antwort.status_code == 400
+    assert "sitzt niemand" in antwort.text
+
+
+def test_ein_ungueltiger_notenwert_wird_abgewiesen(client, session, graph):
+    kurs = _kurs_mit_vorgabegruppen(session, graph)
+    _setze(client, graph, 1, 1, graph.schueler_a, kurs)
+
+    antwort = client.post(
+        f"{url(graph)}/platz/1/1/mitarbeit",
+        data={"kurs": kurs.id, "notenwert": "2.5"},
+        headers=HTMX,
+    )
+
+    assert antwort.status_code == 400
+    assert "keine gültige Note" in antwort.text
+
+
+def test_ein_kurs_einer_fremden_klasse_wird_abgewiesen(client, session, graph):
+    from app.db.models import Klasse
+    from app.services import verwaltung
+
+    kurs = _kurs_mit_vorgabegruppen(session, graph)
+    _setze(client, graph, 1, 1, graph.schueler_a, kurs)
+    andere = verwaltung.lege_klasse_an(session, graph.schuljahr, "BFS 26b")
+    fremd = verwaltung.lege_kurs_an(session, andere, "Sport")
+    session.commit()
+
+    antwort = client.post(
+        f"{url(graph)}/platz/1/1/mitarbeit",
+        data={"kurs": fremd.id, "notenwert": "1.0"},
+        headers=HTMX,
+    )
+
+    assert antwort.status_code == 400
+    assert "kein Kurs gewählt" in antwort.text
+
+
+def test_der_kurs_bleibt_beim_umsetzen_erhalten(client, session, graph):
+    """And he survives as a usable parameter, not as double-escaped text:
+    &amp;amp; would reach the server as a parameter called "amp;kurs"."""
+    kurs = _kurs_mit_vorgabegruppen(session, graph)
+
+    antwort = _setze(client, graph, 1, 1, graph.schueler_a, kurs)
+
+    assert f"&amp;kurs={kurs.id}" in antwort.text
+    assert "amp;amp;" not in antwort.text

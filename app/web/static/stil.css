@@ -660,6 +660,7 @@ table.matrix.spiegel .wert {
 @media print {
   header,
   .sitzkopf,
+  .kurswahl,
   .sitzauswahl,
   .sitzzustand,
   .rasterform,
@@ -680,4 +681,21 @@ table.matrix.spiegel .wert {
   .platz.leer {
     background: none;
   }
+}
+
+.kurswahl {
+  align-items: baseline;
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: var(--abstand);
+}
+
+.kurswahl select {
+  margin-top: 0;
+  width: auto;
+}
+
+.mitarbeitsform label {
+  display: block;
+  margin-bottom: 0.5rem;
 }

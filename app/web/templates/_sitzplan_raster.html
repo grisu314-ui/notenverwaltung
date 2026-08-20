@@ -5,11 +5,12 @@
    The confirmation is rendered by the server, never by the browser: what you
    read is the state that was stored (specification 10). #}
 {% set adresse = "/klassen/" ~ klasse.id ~ "/sitzplan" %}
+{# The chosen course rides along in every link, so a tap never loses it. #}
 <div id="sitzplan" class="sitzplan" data-modus="{{ modus }}">
 
   <p class="sitzzustand" data-zustand="{{ 'gespeichert' if gerade_gespeichert else 'ruhe' }}"
      role="status">
-    {% if gerade_gespeichert %}gespeichert{% endif %}
+    {% if gerade_gespeichert %}gespeichert{% if meldung %} — {{ meldung }}{% endif %}{% endif %}
   </p>
 
   <ol class="sitzreihen">
@@ -39,6 +40,7 @@
                     hx-post="{{ adresse }}/platz/{{ auswahl.reihe }}/{{ auswahl.position }}"
                     hx-target="#sitzplan" hx-swap="outerHTML">
                 <input type="hidden" name="schueler_id" value="{{ s.id }}">
+                {% if kurs %}<input type="hidden" name="kurs" value="{{ kurs.id }}">{% endif %}
                 <button type="submit" class="sitzwahl">{% include "_sitzbild.html" %}</button>
               </form>
             </li>
@@ -47,8 +49,8 @@
       {% else %}
         <p class="hinweis">Alle aktiven Schüler dieser Klasse haben einen Platz.</p>
       {% endif %}
-      <a class="abbrechen" href="{{ adresse }}?modus=bearbeiten"
-         hx-get="{{ adresse }}/raster?modus=bearbeiten"
+      <a class="abbrechen" href="{{ adresse }}?modus=bearbeiten{% if kurs %}&amp;kurs={{ kurs.id }}{% endif %}"
+         hx-get="{{ adresse }}/raster?modus=bearbeiten{% if kurs %}&amp;kurs={{ kurs.id }}{% endif %}"
          hx-target="#sitzplan" hx-swap="outerHTML">Abbrechen</a>
     </div>
 
@@ -61,18 +63,55 @@
           <form method="post" action="{{ adresse }}/platz/{{ auswahl.reihe }}/{{ auswahl.position }}/raeumen"
                 hx-post="{{ adresse }}/platz/{{ auswahl.reihe }}/{{ auswahl.position }}/raeumen"
                 hx-target="#sitzplan" hx-swap="outerHTML">
+            {% if kurs %}<input type="hidden" name="kurs" value="{{ kurs.id }}">{% endif %}
             <button type="submit">Platz räumen</button>
           </form>
-          <a class="schaltflaeche" href="{{ adresse }}?modus=tauschen&amp;reihe={{ auswahl.reihe }}&amp;position={{ auswahl.position }}"
-             hx-get="{{ adresse }}/raster?modus=tauschen&amp;reihe={{ auswahl.reihe }}&amp;position={{ auswahl.position }}"
+          <a class="schaltflaeche" href="{{ adresse }}?modus=tauschen&amp;reihe={{ auswahl.reihe }}&amp;position={{ auswahl.position }}{% if kurs %}&amp;kurs={{ kurs.id }}{% endif %}"
+             hx-get="{{ adresse }}/raster?modus=tauschen&amp;reihe={{ auswahl.reihe }}&amp;position={{ auswahl.position }}{% if kurs %}&amp;kurs={{ kurs.id }}{% endif %}"
              hx-target="#sitzplan" hx-swap="outerHTML">Tauschen</a>
+          {% if kurs %}
+            <a class="schaltflaeche" href="{{ adresse }}?modus=mitarbeit&amp;reihe={{ auswahl.reihe }}&amp;position={{ auswahl.position }}{% if kurs %}&amp;kurs={{ kurs.id }}{% endif %}"
+               hx-get="{{ adresse }}/raster?modus=mitarbeit&amp;reihe={{ auswahl.reihe }}&amp;position={{ auswahl.position }}{% if kurs %}&amp;kurs={{ kurs.id }}{% endif %}"
+               hx-target="#sitzplan" hx-swap="outerHTML">Mitarbeitsnote</a>
+          {% endif %}
           <a class="schaltflaeche" href="/schueler/{{ auswahl.schueler.id }}">Schülerblatt</a>
         </div>
+        {% if not kurs %}
+          <p class="hinweis">Für eine Mitarbeitsnote oben den Kurs wählen.</p>
+        {% endif %}
       {% else %}
         <p class="hinweis">Dieser Platz ist frei.</p>
       {% endif %}
-      <a class="abbrechen" href="{{ adresse }}?modus=bearbeiten"
-         hx-get="{{ adresse }}/raster?modus=bearbeiten"
+      <a class="abbrechen" href="{{ adresse }}?modus=bearbeiten{% if kurs %}&amp;kurs={{ kurs.id }}{% endif %}"
+         hx-get="{{ adresse }}/raster?modus=bearbeiten{% if kurs %}&amp;kurs={{ kurs.id }}{% endif %}"
+         hx-target="#sitzplan" hx-swap="outerHTML">Abbrechen</a>
+    </div>
+
+  {% elif modus == "mitarbeit" %}
+    <div class="sitzauswahl">
+      <h2>Mitarbeitsnote · {{ kurs.fach }}</h2>
+      <p>
+        {{ auswahl.schueler.vorname | anzeigename(auswahl.schueler.nachname, einstellungen.namensanzeige) }}
+        <span class="hinweis">· {{ heute.strftime('%d.%m.%Y') }}</span>
+      </p>
+      <form method="post" action="{{ adresse }}/platz/{{ auswahl.reihe }}/{{ auswahl.position }}/mitarbeit"
+            hx-post="{{ adresse }}/platz/{{ auswahl.reihe }}/{{ auswahl.position }}/mitarbeit"
+            hx-target="#sitzplan" hx-swap="outerHTML" class="mitarbeitsform">
+        <input type="hidden" name="kurs" value="{{ kurs.id }}">
+        <label>Note
+          <select name="notenwert" required>
+            {% for schluessel, beschriftung in notenauswahl %}
+              <option value="{{ schluessel }}"{% if beschriftung == '3' %} selected{% endif %}>{{ beschriftung }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Notiz
+          <input name="notiz" maxlength="500" placeholder="Wofür, in drei Worten">
+        </label>
+        <button type="submit">Eintragen</button>
+      </form>
+      <a class="abbrechen" href="{{ adresse }}?modus=bearbeiten{% if kurs %}&amp;kurs={{ kurs.id }}{% endif %}"
+         hx-get="{{ adresse }}/raster?modus=bearbeiten{% if kurs %}&amp;kurs={{ kurs.id }}{% endif %}"
          hx-target="#sitzplan" hx-swap="outerHTML">Abbrechen</a>
     </div>
 
@@ -80,8 +119,8 @@
     <div class="sitzauswahl">
       <h2>Tauschen</h2>
       <p class="hinweis">Zielplatz antippen. Ist er frei, wird umgesetzt.</p>
-      <a class="abbrechen" href="{{ adresse }}?modus=bearbeiten"
-         hx-get="{{ adresse }}/raster?modus=bearbeiten"
+      <a class="abbrechen" href="{{ adresse }}?modus=bearbeiten{% if kurs %}&amp;kurs={{ kurs.id }}{% endif %}"
+         hx-get="{{ adresse }}/raster?modus=bearbeiten{% if kurs %}&amp;kurs={{ kurs.id }}{% endif %}"
          hx-target="#sitzplan" hx-swap="outerHTML">Abbrechen</a>
     </div>
   {% endif %}
