@@ -59,6 +59,29 @@ from app.enums import (
 # the teacher fixes the actual report grade anyway (Notenueberschreibung).
 VORGABE_GEWICHT_HALBJAHR = Decimal("50")
 
+# Section 5.6. Grid of a seating plan: rows and seats per row, adjustable
+# independently. The upper bound guards against a typo; it says nothing about
+# any real room.
+VORGABE_REIHEN = 5
+VORGABE_SITZE_JE_REIHE = 6
+MIN_RASTER = 1
+MAX_RASTER = 12
+
+# Section 3.1: the three groups every new course starts with, per term. Name
+# and weight are editable afterwards; this is a starting point, not a rule.
+#
+# The 3 for Mitarbeit is the point of the whole table. The calculation is
+# single-stage (4.4), so a group weighs more the more grades it holds, and
+# participation grades accumulate one by one over the term (5.6). At a weight
+# in the order of the other groups they would end up the heaviest item on the
+# report.
+BEZEICHNUNG_MITARBEIT = "Mitarbeit"
+VORGABE_NOTENGRUPPEN: tuple[tuple[str, Decimal, int], ...] = (
+    ("Klassenarbeit", Decimal("70"), 1),
+    ("Kleiner Nachweis", Decimal("30"), 2),
+    (BEZEICHNUNG_MITARBEIT, Decimal("3"), 3),
+)
+
 
 def _in_clause(column: str, allowed: Iterable[str]) -> str:
     """SQL ``IN`` predicate over the fixed vocabulary from :mod:`app.enums`.
@@ -134,6 +157,12 @@ class Klasse(Base):
     kurse: Mapped[list["Kurs"]] = relationship(
         back_populates="klasse", cascade="all, delete", passive_deletes=True
     )
+    sitzplan: Mapped["Sitzplan | None"] = relationship(
+        back_populates="klasse",
+        cascade="all, delete",
+        passive_deletes=True,
+        uselist=False,
+    )
 
     __table_args__ = (UniqueConstraint("schuljahr_id", "bezeichnung"),)
 
@@ -170,6 +199,9 @@ class Schueler(Base):
         back_populates="schueler", cascade="all, delete", passive_deletes=True
     )
     ueberschreibungen: Mapped[list["Notenueberschreibung"]] = relationship(
+        back_populates="schueler", cascade="all, delete", passive_deletes=True
+    )
+    sitzplaetze: Mapped[list["Sitzplatz"]] = relationship(
         back_populates="schueler", cascade="all, delete", passive_deletes=True
     )
 
@@ -231,7 +263,10 @@ class Kursteilnahme(Base):
 class Notengruppe(Base):
     """Weights are defined per course and term (3.1).
 
-    They need not add up to 100; the grading module normalises them (4.4).
+    They need not add up to 100 and are never normalised: the calculation is
+    single-stage (4.4), so a weight acts as a factor and only the ratios
+    between the groups matter. A group without a counted grade drops out of
+    numerator and denominator by itself.
 
     The database cannot express that ``halbjahr`` must belong to the same
     school year as ``kurs.klasse.schuljahr`` without redundant columns and a
@@ -416,6 +451,86 @@ class NoteHistorie(Base):
             f"neuer_status IS NULL OR {_in_clause('neuer_status', NoteStatus)}",
             name="neuer_status_gueltig",
         ),
+    )
+
+
+class Sitzplan(Base):
+    """The seating order of one class (5.6).
+
+    Exactly one per class -- hence ``UNIQUE(klasse_id)``. The row is created
+    when the plan is opened for the first time, not together with the class:
+    a class that is never seated needs none.
+
+    Only **occupied** seats carry a :class:`Sitzplatz` row; the empty ones
+    follow from the grid. That a seat lies inside the grid cannot be a CHECK
+    -- SQLite allows no subquery there -- so the service layer enforces it,
+    the same way it enforces the term of a Notengruppe.
+    """
+
+    __tablename__ = "sitzplan"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    klasse_id: Mapped[int] = mapped_column(
+        ForeignKey("klasse.id", ondelete="CASCADE"), nullable=False
+    )
+    reihen: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=VORGABE_REIHEN
+    )
+    sitze_je_reihe: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=VORGABE_SITZE_JE_REIHE
+    )
+
+    klasse: Mapped["Klasse"] = relationship(back_populates="sitzplan")
+    plaetze: Mapped[list["Sitzplatz"]] = relationship(
+        back_populates="sitzplan", cascade="all, delete", passive_deletes=True
+    )
+
+    __table_args__ = (
+        UniqueConstraint("klasse_id"),
+        CheckConstraint(
+            f"reihen BETWEEN {MIN_RASTER} AND {MAX_RASTER}", name="reihen_gueltig"
+        ),
+        CheckConstraint(
+            f"sitze_je_reihe BETWEEN {MIN_RASTER} AND {MAX_RASTER}",
+            name="sitze_je_reihe_gueltig",
+        ),
+    )
+
+
+class Sitzplatz(Base):
+    """One occupied seat of a seating plan (5.6).
+
+    A seat holds at most one pupil, and a pupil sits on at most one seat of a
+    plan. Both are unique constraints: the other cases have no sensible
+    display, and a plan that cannot be displayed is worse than a refused
+    input.
+
+    The row **survives the pupil going inactive**. The plan hides an inactive
+    pupil and shows the seat as free, so deactivating stays as reversible here
+    as it is everywhere else in this application. Assigning that seat to
+    someone else replaces the old row.
+    """
+
+    __tablename__ = "sitzplatz"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    sitzplan_id: Mapped[int] = mapped_column(
+        ForeignKey("sitzplan.id", ondelete="CASCADE"), nullable=False
+    )
+    schueler_id: Mapped[int] = mapped_column(
+        ForeignKey("schueler.id", ondelete="CASCADE"), nullable=False
+    )
+    reihe: Mapped[int] = mapped_column(Integer, nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    sitzplan: Mapped["Sitzplan"] = relationship(back_populates="plaetze")
+    schueler: Mapped["Schueler"] = relationship(back_populates="sitzplaetze")
+
+    __table_args__ = (
+        UniqueConstraint("sitzplan_id", "reihe", "position"),
+        UniqueConstraint("sitzplan_id", "schueler_id"),
+        CheckConstraint(f"reihe >= {MIN_RASTER}", name="reihe_gueltig"),
+        CheckConstraint(f"position >= {MIN_RASTER}", name="position_gueltig"),
     )
 
 

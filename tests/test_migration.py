@@ -20,6 +20,8 @@ ERWARTETE_TABELLEN = {
     "notenueberschreibung",
     "schueler",
     "schuljahr",
+    "sitzplan",
+    "sitzplatz",
 }
 
 

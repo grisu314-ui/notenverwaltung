@@ -33,6 +33,7 @@ from app.web.routers import (
     notengruppen,
     schueler,
     schuljahre,
+    sitzplan,
     teilnahmen,
 )
 
@@ -52,6 +53,7 @@ for modul in (
     schueler,
     kurse,
     notengruppen,
+    sitzplan,
     teilnahmen,
 ):
     app.include_router(modul.router)

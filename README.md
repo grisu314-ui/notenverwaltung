@@ -34,7 +34,9 @@ Vorrang vor allem außer der Spezifikation.
 Schuljahre mit zwei Halbjahren, Klassen, Kurse, Notengruppen mit Gewichten,
 Kursteilnahmen. Noten in Serie eintragen — auf dem Telefon, mit sichtbarer
 Speicherbestätigung. Klassenansicht mit Fotos, Schülerblatt, Kursübersicht als
-Matrix mit Notenspiegel, Suche über alle Schuljahre. Fotoerfassung mit
+Matrix mit Notenspiegel, Suche über alle Schuljahre. Sitzplan je Klasse, mit
+Foto und Namen, druckbar, mit der Mitarbeitsnote des Tages. Neue Kurse
+starten mit drei Notengruppen. Fotoerfassung mit
 Zuschnitt im Browser. Halbjahres- und Jahresnoten, jeweils überschreibbar.
 Export nach XLSX und Markdown. Endgültiges Löschen von Schülern und
 Schuljahren.
@@ -57,7 +59,7 @@ app/services/   Geschäftslogik
 app/db/         Modelle, Engine, Sitzungen
 app/web/        Router, Templates, statische Dateien
 scripts/        Sicherung, Schemaprüfung, Entwicklungsdaten
-tests/          376 Tests
+tests/          457 Tests
 ```
 
 ## Schnellstart für die Entwicklung

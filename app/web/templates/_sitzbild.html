@@ -1,0 +1,8 @@
+{# Photo and name of one pupil, the same way the class view shows them (5.1).
+   Expects `s`. #}
+{% if s.foto_geaendert_am %}
+  <img src="/schueler/{{ s.id }}/foto" alt="" class="portrait klein">
+{% else %}
+  <span class="portrait klein platzhalter" aria-hidden="true">{{ (s.vorname[:1] ~ s.nachname[:1]) | upper }}</span>
+{% endif %}
+<span class="sitzname">{{ s.vorname | anzeigename(s.nachname, einstellungen.namensanzeige) }}</span>

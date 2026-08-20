@@ -65,7 +65,7 @@ Dateisystem, keine externen Dienste. Fotos liegen als BLOB in derselben Datei
 1. `CLAUDE.md` lesen. Es ist die kürzeste Beschreibung dessen, was in diesem
    Projekt gilt, und es hat Vorrang vor Gewohnheiten.
 2. Die Tests laufen lassen (`docs/entwicklung.md`). Das ist der schnellste Weg,
-   dem Code zu vertrauen: 376 Tests, keine Attrappen für die Datenbank, jeder
+   dem Code zu vertrauen: 457 Tests, keine Attrappen für die Datenbank, jeder
    Test baut sein Schema über die echte Migration auf.
 3. `docs/notenlogik.md` lesen. Der fachliche Kern und der einzige Teil, den man
    nicht aus dem Code erschließen sollte.
@@ -76,7 +76,7 @@ Dateisystem, keine externen Dienste. Fotos liegen als BLOB in derselben Datei
 
 | Wann | Was | Wer |
 |---|---|---|
-| täglich, automatisch | Cron zieht um 2 Uhr eine Sicherung, 14 Stände Aufbewahrung | — |
+| täglich, automatisch | Cron zieht um 2 Uhr eine Sicherung, 31 Stände Aufbewahrung | — |
 | gelegentlich | prüfen, dass in `sicherungen/` frische Dateien liegen | Betreiber |
 | bei jeder neuen Version | **erst sichern, dann migrieren, dann starten** | Betreiber |
 | ein- bis zweimal im Jahr | Abhängigkeiten aktualisieren, Tests laufen lassen | Assistent, dann Betreiber |

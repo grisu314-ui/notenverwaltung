@@ -28,10 +28,13 @@ from app.db.models import (
     Notenueberschreibung,
     Schueler,
     Schuljahr,
+    Sitzplan,
+    Sitzplatz,
 )
 from app.enums import Bezugszeitraum, NoteStatus, UeberschreibungQuelle
 from app.services import loeschen as loeschdienst
 from app.services import noten as notendienst
+from app.services import sitzplan as sitzplandienst
 from app.services import verwaltung
 
 # Recognisable in a hex dump and long enough not to be mistaken for noise.
@@ -161,7 +164,13 @@ def test_vom_geloeschten_schueler_bleibt_in_keiner_tabelle_eine_zeile(session, b
 
     # Asked of the database, not of the ORM: a cascade that did not fire would
     # otherwise stay invisible behind the identity map.
-    for tabelle in ("schueler", "note", "note_historie", "notenueberschreibung"):
+    for tabelle in (
+        "schueler",
+        "note",
+        "note_historie",
+        "notenueberschreibung",
+        "sitzplatz",
+    ):
         spalte = "id" if tabelle == "schueler" else "schueler_id"
         anzahl = session.execute(
             text(f"SELECT count(*) FROM {tabelle} WHERE {spalte} = :kennung"),
@@ -213,7 +222,9 @@ def test_ein_anderes_schuljahr_bleibt_beim_loeschen_unversehrt(session, bestand)
     assert [j.bezeichnung for j in session.query(Schuljahr).all()] == ["2027/28"]
     assert zeilen(session, Klasse) == 1
     assert zeilen(session, Kurs) == 1
-    assert zeilen(session, Notengruppe) == 1
+    # The one created by hand plus the six default groups of the new course
+    # (three per term, 3.1) -- all of them belong to the year that stays.
+    assert zeilen(session, Notengruppe) == 1 + 6
     assert zeilen(session, Leistung) == 1
     assert zeilen(session, Note) == 1
     assert zeilen(session, NoteHistorie) == 1
@@ -291,3 +302,42 @@ def test_verdichten_laesst_die_uebrigen_daten_und_die_pragmas_in_ruhe(
         assert kopie.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:
         kopie.close()
+
+
+# ---------------------------------------------------------------------------
+# The seating plan (5.6) is part of what a deletion removes -- and of what the
+# confirmation page counts. A number that leaves something out is a lie.
+# ---------------------------------------------------------------------------
+
+
+def test_der_umfang_eines_schuelers_zaehlt_seinen_sitzplatz(session, bestand):
+    plan = sitzplandienst.hole_oder_lege_an(session, bestand.klasse)
+    sitzplandienst.setze_platz(session, plan, 1, 1, bestand.schueler_a)
+    session.commit()
+
+    umfang = loeschdienst.umfang_schueler(session, bestand.schueler_a)
+    assert dict(umfang.posten)["Sitzplatzzuweisungen"] == 1
+
+    loeschdienst.loesche_schueler(session, bestand.schueler_a)
+    session.commit()
+
+    assert zeilen(session, Sitzplatz) == 0
+    # The plan itself belongs to the class and stays.
+    assert zeilen(session, Sitzplan) == 1
+
+
+def test_der_umfang_eines_schuljahres_zaehlt_plan_und_plaetze(session, bestand):
+    plan = sitzplandienst.hole_oder_lege_an(session, bestand.klasse)
+    sitzplandienst.setze_platz(session, plan, 1, 1, bestand.schueler_a)
+    sitzplandienst.setze_platz(session, plan, 1, 2, bestand.schueler_b)
+    session.commit()
+
+    posten = dict(loeschdienst.umfang_schuljahr(session, bestand.schuljahr).posten)
+    assert posten["Sitzpläne"] == 1
+    assert posten["Sitzplatzzuweisungen"] == 2
+
+    loeschdienst.loesche_schuljahr(session, bestand.schuljahr)
+    session.commit()
+
+    assert zeilen(session, Sitzplan) == 0
+    assert zeilen(session, Sitzplatz) == 0

@@ -1,9 +1,9 @@
 # Notenverwaltung – Projektspezifikation
 
-**Version:** 1.1 · **Stand:** 19.08.2026
-**Zweck:** Beschreibt, *was* gebaut wurde, nicht *wie*. Version 1.1 ist auf den
-umgesetzten Stand nachgeführt; die Abweichungen gegenüber Version 1.0 stehen
-gesammelt am Ende.
+**Version:** 1.2 · **Stand:** 19.08.2026
+**Zweck:** Beschreibt, *was* gebaut wurde, nicht *wie*. Version 1.2 ergänzt den
+Sitzplan (5.6, dazu die beiden Entitäten in 3.1); er ist inzwischen umgesetzt.
+Die Änderungslisten stehen gesammelt am Ende.
 **Auftraggeber/Betreiber/Alleinnutzer:** eine Lehrkraft an einer berufsbildenden Schule (Rheinland-Pfalz).
 
 ---
@@ -80,6 +80,7 @@ Eine Klasse gehört zu genau einem Schuljahr.
 - Eine Klasse enthält mehrere Kurse. Ein Kurs gehört zu genau einer Klasse.
 - „Kurs" entspricht hier faktisch „Fach in dieser Klasse".
 - Die beiden Gewichte steuern die Jahresnote (4.5), Vorgabe 50/50.
+- Beim Anlegen eines Kurses entstehen **je Halbjahr drei Notengruppen als Vorgabe** (siehe *Notengruppe*).
 
 **Kursteilnahme** (n:m, Schüler ↔ Kurs)
 `kurs_id`, `schueler_id`, `ist_aktiv`
@@ -87,11 +88,37 @@ Eine Klasse gehört zu genau einem Schuljahr.
 - Beim Anlegen eines Kurses werden alle aktiven Schüler der Klasse eingetragen; ein später angelegter Schüler kommt in die bestehenden Kurse.
 - Das explizite Zwischenmodell ist nötig, weil nicht jeder Schüler jeden Kurs seiner Klasse besucht (Differenzierung, Wahlpflicht, Zusatzqualifikation). Ohne dieses Modell entstehen später falsche Klassendurchschnitte.
 
+**Sitzplan** (5.6)
+`id`, `klasse_id`, `reihen`, `sitze_je_reihe`
+
+- Genau einer je Klasse; `klasse_id` ist eindeutig. Der Datensatz entsteht beim ersten Öffnen des Plans, nicht beim Anlegen der Klasse.
+- Raster 1 bis 12 in beide Richtungen, unabhängig einstellbar, Vorgabe 5 × 6.
+
+**Sitzplatz** (5.6)
+`id`, `sitzplan_id`, `schueler_id`, `reihe`, `position`
+
+- Nur **belegte** Plätze haben einen Datensatz. Die leeren ergeben sich aus dem Raster; ein Plan mit dreißig Sitzen und zwei Schülern sind zwei Zeilen, nicht dreißig.
+- Je Sitzplan sind (`reihe`, `position`) und `schueler_id` jeweils eindeutig: ein Platz trägt einen Schüler, ein Schüler sitzt an einem Platz.
+- Dass ein Platz innerhalb des Rasters liegt, prüft die Anwendung, nicht das Schema — SQLite erlaubt in einer `CHECK`-Bedingung keine Unterabfrage.
+- Der Datensatz **überlebt das Deaktivieren** des Schülers. Der Platz wird dann als frei angezeigt und der Schüler sitzt wieder dort, wenn er erneut aktiv gesetzt wird.
+
 **Notengruppe**
 `id`, `kurs_id`, `halbjahr_id`, `bezeichnung` (z. B. „Klassenarbeiten", „Tests", „Mitarbeit"), `gewicht` (Dezimal), `reihenfolge`
 
 - Gewichte werden **pro Kurs und Halbjahr** definiert.
 - Gewichte müssen sich nicht auf 100 summieren (siehe 4.4).
+- **Vorgabegruppen.** Beim Anlegen eines Kurses entstehen automatisch je Halbjahr drei Gruppen — sechs Datensätze je Kurs:
+
+  | Bezeichnung | Gewicht | Reihenfolge |
+  |---|---|---|
+  | Klassenarbeit | 70 | 1 |
+  | Kleiner Nachweis | 30 | 2 |
+  | Mitarbeit | 3 | 3 |
+
+  Bezeichnung und Gewicht sind danach frei änderbar, weitere Gruppen lassen sich anlegen, leere lassen sich löschen. Die Vorgabe ist ein Startpunkt, keine Festlegung.
+
+  **Das Gewicht 3 für die Mitarbeit ist kein Tippfehler.** Die Berechnung ist einstufig (4.4): Eine Gruppe wirkt umso stärker, je mehr Noten sie enthält. Mitarbeitsnoten entstehen einzeln über das Schuljahr verteilt (5.6) und wären mit einem Gewicht in der Größenordnung der anderen Gruppen schnell die schwerste Position im Zeugnis. Mit 3 bleiben auch zwanzig Mitarbeitsnoten unter drei kleinen Nachweisen.
+- Bestehende Kurse erhalten die Vorgabegruppen **nicht rückwirkend**; sie werden dort von Hand angelegt. Eine Migration, die in vorhandene Notenberechnungen eingreift, findet nicht statt.
 
 **Leistung** (eine Bewertungssituation, z. B. „2. Klassenarbeit")
 `id`, `notengruppe_id`, `bezeichnung`, `datum`, `gewicht` (Standard 1.0), `notiz`
@@ -154,6 +181,8 @@ Noten werden ausschließlich **direkt als Notenstufe mit Tendenz** eingetragen (
 - `nicht_erbracht` — geht als 6 (6,0) in die Berechnung ein.
 
 Die Unterscheidung zwischen „nicht gewertet" und „fehlt" ist zwingend. Ein fehlender Wert darf **niemals** implizit als 0 oder als 6 behandelt werden.
+
+**Zwei Wege zur Note.** Der Regelweg ist die Serieneingabe (5.4): eine Leistung, alle Teilnehmer nacheinander. Daneben steht die **Mitarbeitsnote aus dem Sitzplan** (5.6) — eine einzelne Note für einen einzelnen Schüler an einem Tag. Beide schreiben denselben Datensatz und dieselbe Änderungshistorie (3.2); es gibt keinen zweiten Rechenweg.
 
 ### 4.4 Berechnung der Halbjahresnote
 
@@ -243,6 +272,84 @@ Die Nummerierung folgt Version 1.0. T-5, T-6 und T-10 prüften Punkteeingabe und
 
 Schuljahre, Halbjahre, Klassen, Kurse, Notengruppen mit Gewichten, Kursteilnahmen.
 
+### 5.6 Sitzplan
+
+Zweck: Die Lehrkraft sieht während des Unterrichts, **wer wo sitzt** — mit Foto und Namen, in derselben Darstellung wie die Klassenansicht (5.1). Ein Sitzplan ist eine *Ansicht auf Schüler*; die einzige Note, die er berührt, ist die Mitarbeitsnote des laufenden Tages (siehe unten).
+
+**Genau ein Sitzplan je Klasse.** Er gehört zu genau einer Klasse, trägt keine eigene Bezeichnung — er heißt wie seine Klasse — und ist aus der Klassenansicht mit einem Tipper erreichbar. Es gibt keine Auswahlliste, keinen zweiten Plan für einen anderen Raum und **keine gesonderte Klausurordnung**.
+
+Er zeigt die **aktiven** Schüler der Klasse. Es gibt keinen Kursbezug und keinen Kursfilter: Wird eine Klasse in einem Kurs unterrichtet, den nur ein Teil ihrer Schüler besucht (3.1, Kursteilnahme), zeigt der Plan trotzdem alle. Er bildet den Raum ab, nicht die Teilnehmerliste.
+
+#### Der Raum
+
+Der Plan ist ein **Raster aus Reihen und Sitzen je Reihe**. Beide Zahlen sind unabhängig voneinander einstellbar, jeweils **1 bis 12**; die Vorgabe ist **5 Reihen zu je 6 Sitzen**. Die obere Schranke schützt vor Vertippern, sie ist keine Aussage über einen Raum.
+
+- Die **Tafel liegt immer unten**, am Bildschirm wie im Ausdruck, und ist als solche beschriftet. Der Plan zeigt den Raum **aus Sicht der Lehrkraft**: Sie steht vorn, mit dem Rücken zur Tafel, und die Reihen laufen von der Tafel weg auf sie zu. Es gibt keine Drehung und keine Umschaltung der Blickrichtung — ein Plan ohne feststehende Blickrichtung wird im Unterricht falsch gelesen.
+- Jeder Platz ist über Reihe und Position eindeutig bezeichnet.
+- **Gänge und Lücken entstehen durch leere Plätze**, nicht durch eine eigene Raumgeometrie. Frei auf einer Fläche platzierbare Tische gibt es nicht (Begründung unter „Bedienung").
+- Das **Verkleinern des Rasters wird abgewiesen**, solange dabei ein besetzter Platz wegfiele. Die Meldung nennt die betroffenen Schüler. Ein stillschweigendes Räumen findet nicht statt.
+
+#### Belegung
+
+- Ein Platz trägt **höchstens einen** Schüler. Ein Doppeltisch sind zwei Plätze nebeneinander, nicht ein Platz mit zwei Personen.
+- Ein Schüler sitzt auf **höchstens einem** Platz.
+- **Leere Plätze sind der Normalfall**, kein Fehler.
+- Schüler ohne Platz stehen in einer Liste unterhalb des Plans, überschrieben mit ihrer Anzahl. Diese Liste ist sichtbar, sobald sie nicht leer ist. Damit kann ein neu angelegter Schüler nicht übersehen werden, und der Plan erweckt nie den Eindruck, vollständig zu sein, während jemand fehlt.
+
+#### Bedienung
+
+Maßstab ist das Telefon, einhändig im Stehen gehalten (10). Daraus folgt:
+
+- Der Plan ist beim Öffnen **nur lesend**. Ein Tipper auf einen Schüler öffnet dessen Schüleransicht (5.2), genau wie eine Kachel in der Klassenansicht.
+- Ein Schalter **„Plätze bearbeiten"** schaltet das Zuweisen ein. Erst dann verändert ein Tipper die Sitzordnung. Ohne diese Trennung setzt eine Fehlberührung während des Unterrichts jemanden um.
+- Zuweisen geschieht in **zwei Tippern, ohne Ziehen**: freien Platz antippen, dann aus der erscheinenden Liste der noch nicht zugewiesenen Schüler — mit Foto und Namen, in großen Zeilen — einen antippen.
+- Ein besetzter Platz bietet **„Platz räumen"** und **„Tauschen"** an; beim Tauschen wird anschließend der zweite Platz angetippt.
+- **Ziehen und Fallenlassen gibt es nicht.** Es ist einhändig im Stehen nicht zuverlässig bedienbar. Diese Entscheidung, nicht die Bequemlichkeit der Umsetzung, bestimmt auch die Rasterform des Raums.
+- Jede Zuweisung wird **sichtbar bestätigt, erst nach der Antwort des Servers** — dieselbe Regel wie bei der Noteneingabe (10).
+
+#### Drucken
+
+Der Plan lässt sich als eine Seite drucken: das Raster **mit Fotos und Namen**, ohne Bedienelemente. Ohne Fotos hätte der Ausdruck für den Zweck zu wenig Wert; der Betreiber hat entschieden, dass die Ausdrucke seinen Besitz nicht verlassen.
+
+Einen Export in ein Dateiformat gibt es nicht — kein PDF, kein XLSX. Der Ausdruck **enthält Klarnamen und Lichtbilder** und liegt damit, wie jeder Export (8), außerhalb der Reichweite der Löschfunktion (11).
+
+#### Lebensdauer
+
+Der Sitzplan hängt an der Klasse und damit an deren Schuljahr (3.1). Er bleibt innerhalb des Schuljahres bestehen und wird mit der Klasse oder dem Schuljahr gelöscht. Es gibt **keinen Übertrag** in ein Folgejahr: Ein neues Schuljahr bedeutet eine neue Klasse und meist einen anderen Raum.
+
+#### Schüler, die inaktiv werden oder gelöscht werden
+
+| Vorgang | Wirkung auf den Sitzplan |
+|---|---|
+| Schüler auf **inaktiv** gesetzt (3.1) | Die Zuweisung bleibt erhalten, der Platz wird als **frei angezeigt**. Wird der Schüler wieder aktiv, sitzt er wieder auf seinem Platz. Wird der Platz zwischenzeitlich neu vergeben, ersetzt die neue Zuweisung die alte. |
+| Schüler **endgültig gelöscht** (11) | Die Zuweisung wird mitgelöscht, der Platz wird frei. Die vorgeschaltete Zählung des Umfangs weist die betroffenen Sitzplatzzuweisungen mit aus. |
+
+Das Deaktivieren ist in dieser Anwendung durchgängig die *umkehrbare* Alternative zum Löschen; die Sitzordnung verhält sich genauso. Ein Räumen des Platzes beim Deaktivieren wäre ein Datenverlust an einer Stelle, an der niemand mit dem Sitzplan rechnet.
+
+#### Die Mitarbeitsnote des Tages
+
+Der einzige Weg, auf dem der Sitzplan eine Note berührt. Gedacht für den Moment im Unterricht, in dem eine Leistung auffällt — **nach oben wie nach unten**. Der Regelfall ist, dass an einem Tag **niemand oder nur einzelne** eine Mitarbeitsnote bekommen; eine Note für jeden ist ausdrücklich nicht gemeint.
+
+**Der Kurs wird beim Öffnen gewählt.** Der Sitzplan gehört zur Klasse, eine Note zu einem Kurs. Beim Öffnen des Plans wird deshalb einmal der Kurs gewählt, in dem gerade unterrichtet wird; er bleibt oben sichtbar und gilt für die ganze Sitzung. Ohne gewählten Kurs bietet der Plan keine Mitarbeitsnote an.
+
+**Eintragen.** Im Menü eines besetzten Platzes steht neben „Platz räumen" und „Tauschen" der Eintrag **„Mitarbeitsnote"**. Er öffnet die Auswahl 1+ … 6 und ein **Notizfeld** — die Begründung, die man drei Monate später nicht mehr im Kopf hat. Gespeichert wird nach der Antwort des Servers, sichtbar bestätigt wie überall (10).
+
+**Wohin die Note gehört.** In die Notengruppe **„Mitarbeit"** des gewählten Kurses, im Halbjahr, in das das heutige Datum fällt. Innerhalb dieser Gruppe entsteht je Tag **eine Leistung** „Mitarbeit TT.MM.JJJJ" mit Gewicht 1,0 — angelegt beim ersten Eintrag des Tages, nicht vorab. Wer an diesem Tag keine Note bekommt, hat dort **keinen Datensatz**; das ist kein fehlender Wert, sondern keine Leistung, und es verändert die Berechnung nicht (4.4).
+
+**Voraussetzung.** Der Kurs muss im betreffenden Halbjahr eine Notengruppe „Mitarbeit" haben. Bei neu angelegten Kursen ist sie als Vorgabe vorhanden (3.1); bei älteren Kursen wird sie von Hand angelegt. Fehlt sie, verweigert die Anwendung den Eintrag mit einer Meldung, die genau das sagt — sie legt keine Gruppe im Vorbeigehen an, weil deren Gewicht eine Zeugnisnote verschiebt.
+
+**Status und Rücknahme.** Eine Mitarbeitsnote ist immer `gewertet`. Die Status `nicht_gewertet` und `nicht_erbracht` haben hier keinen Sinn: Es gibt keine Leistung, die jemand hätte erbringen müssen. Eine falsch vergebene Note wird **gelöscht**, nicht umgewidmet; die Änderungshistorie (3.2) hält das fest wie bei jeder anderen Note.
+
+**In der Übersicht.** Mitarbeitsnoten erscheinen in Kursübersicht (5.3), Schülerblatt (5.2) und Export (8) wie jede andere Note, gruppiert unter „Mitarbeit", chronologisch nach Datum. Es gibt keine gesonderte Darstellung und keine zweite Rechenart.
+
+#### Ausdrücklich nicht Bestandteil
+
+- **Keine Anwesenheiten, keine Fehlzeiten.** Das ist und bleibt ein Nicht-Ziel (1). Ein Sitzplan lädt dazu ein; er ist dafür nicht der Einstieg.
+- **Keine Notenanzeige im Plan.** Der Plan zeigt Foto und Name, keine Noten und keinen Notenstand. Eingetragen wird ausschließlich die Mitarbeitsnote des Tages (siehe oben), und auch die erscheint danach nicht auf dem Platz.
+- Kein zweiter Plan je Klasse, keine Klausurordnung, kein Duplizieren.
+- Keine frei platzierbaren Tische, kein Zoom, kein Ziehen.
+- Kein Übertrag zwischen Schuljahren.
+
 ---
 
 ## 6. Sortierung und Namensanzeige
@@ -319,11 +426,33 @@ Die Anwendung verarbeitet Klarnamen und Lichtbilder von Schülerinnen und Schül
 
 Daraus folgt konkret:
 
-- Eine **Löschfunktion** pro Schüler und pro Schuljahr, die Noten, Foto und Historie vollständig entfernt, ist Pflichtbestandteil. Umgesetzt mit vorgeschalteter Zählung des Umfangs und getippter Bestätigung; die Daten werden anschließend auch physisch aus der Datei entfernt.
+- Eine **Löschfunktion** pro Schüler und pro Schuljahr, die Noten, Foto, Historie und Sitzplatzzuweisungen vollständig entfernt, ist Pflichtbestandteil. Umgesetzt mit vorgeschalteter Zählung des Umfangs und getippter Bestätigung; die Daten werden anschließend auch physisch aus der Datei entfernt.
 - Der Datenbestand muss **exportierbar** sein (Abschnitt 8), damit kein Lock-in entsteht.
 - Es dürfen keine Daten die Anwendung verlassen außer durch den ausdrücklich ausgelösten Export.
 
 Die Klärung der Genehmigung liegt beim Auftraggeber und ist keine Aufgabe des Entwicklungsprojekts.
+
+---
+
+## Änderungen gegenüber Version 1.1
+
+Version 1.1 beschrieb den gebauten Stand. Version 1.2 nimmt eine Funktion auf,
+die in keiner früheren Fassung stand und noch nicht gebaut ist:
+
+| Abschnitt | Änderung | Grund |
+|---|---|---|
+| 5.6 | **Sitzplan neu aufgenommen** — **genau einer je Klasse**, ein Raster aus Reihen und Sitzen (je 1 bis 12, Vorgabe 5 × 6), mit Foto und Namen wie in der Klassenansicht | Wunsch des Betreibers: im Unterricht sehen, wer wo sitzt |
+| 5.6 | Bezugsobjekt ist die **Klasse**, nicht der Kurs; kein Kursfilter | Entscheidung des Betreibers. Der Plan bildet den Raum ab, nicht die Teilnehmerliste |
+| 5.6 | Zuweisung in zwei Tippern, **kein Ziehen**; getrennter Bearbeitungsmodus | Maßstab ist das einhändig gehaltene Telefon (10). Ziehen ist so nicht bedienbar und bestimmt damit auch die Rasterform des Raums |
+| 5.6 | Drucken **mit Fotos**, kein Dateiexport | Entscheidung des Betreibers; ohne Fotos hat der Ausdruck für den Zweck zu wenig Wert. Der Ausdruck liegt außerhalb der Reichweite der Löschfunktion (11) |
+| 5.6 | Ein zweiter Plan je Klasse, eine gesonderte Klausurordnung und ein Planname ausdrücklich ausgeschlossen | Entscheidung des Betreibers: gebraucht wird eine Sitzordnung je Klasse, sonst nichts. Der Plan heißt wie seine Klasse |
+| 3.1, 11 | Entitäten *Sitzplan* und *Sitzplatz* ergänzt; die Löschfunktion nimmt die Sitzplatzzuweisungen mit und weist sie in der Zählung aus | Folge von 5.6 |
+| 5.6 | Anwesenheiten im Plan ausdrücklich ausgeschlossen | Anwesenheiten sind ein Nicht-Ziel (1); ein Sitzplan lädt dazu ein, sie doch mitzuerfassen |
+| 5.6, 4.3 | **Mitarbeitsnote des Tages** aus dem Sitzplan ergänzt, mit Notizfeld; der Kurs wird beim Öffnen des Plans gewählt | Wunsch des Betreibers. Die Stufe, die in der ersten Fassung von 5.6 ausdrücklich noch nicht gebaut wurde |
+| 5.6 | Je Kurs, Halbjahr und Tag entsteht eine Leistung „Mitarbeit TT.MM.JJJJ", angelegt beim ersten Eintrag | Der Regelfall ist, dass an einem Tag niemand oder nur einzelne eine Note bekommen |
+| 3.1 | **Drei Vorgabe-Notengruppen** je Kurs und Halbjahr: Klassenarbeit 70, Kleiner Nachweis 30, Mitarbeit 3 | Entscheidung des Betreibers. Bestehende Kurse bleiben unangetastet |
+| 3.1 | Gewicht der Mitarbeit von 10 auf **3** gesenkt, bevor etwas gebaut wurde | Bei einstufiger Rechnung (4.4) wiegt eine Gruppe umso schwerer, je mehr Noten sie enthält. Mit 10 wären Mitarbeitsnoten die schwerste Position im Zeugnis geworden |
+| 5.6 | Tafel **immer unten**, am Bildschirm wie im Ausdruck | Der Plan zeigt den Raum aus Sicht der Lehrkraft |
 
 ---
 

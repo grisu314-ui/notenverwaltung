@@ -12,6 +12,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from app.db.models import (
+    MAX_RASTER,
     VORGABE_GEWICHT_HALBJAHR,
     Halbjahr,
     Kurs,
@@ -19,6 +20,8 @@ from app.db.models import (
     NoteHistorie,
     Notenueberschreibung,
     Schueler,
+    Sitzplan,
+    Sitzplatz,
 )
 from app.enums import (
     Bezugszeitraum,
@@ -275,3 +278,101 @@ def test_kurs_und_fach_sind_je_klasse_eindeutig(session, graph):
     session.add(Kurs(klasse_id=graph.klasse.id, fach="Deutsch"))
     with pytest.raises(IntegrityError):
         session.flush()
+
+
+def _sitzplan(session, graph) -> Sitzplan:
+    plan = Sitzplan(klasse_id=graph.klasse.id)
+    session.add(plan)
+    session.flush()
+    return plan
+
+
+def test_je_klasse_nur_ein_sitzplan(session, graph):
+    """Specification 5.6: exactly one plan per class, enforced by the schema."""
+    _sitzplan(session, graph)
+    session.add(Sitzplan(klasse_id=graph.klasse.id))
+    with pytest.raises(IntegrityError):
+        session.flush()
+
+
+def test_ein_platz_traegt_nur_einen_schueler(session, graph):
+    plan = _sitzplan(session, graph)
+    session.add(
+        Sitzplatz(sitzplan=plan, schueler=graph.schueler_a, reihe=1, position=1)
+    )
+    session.flush()
+
+    session.add(
+        Sitzplatz(sitzplan=plan, schueler=graph.schueler_b, reihe=1, position=1)
+    )
+    with pytest.raises(IntegrityError):
+        session.flush()
+
+
+def test_ein_schueler_sitzt_nur_auf_einem_platz(session, graph):
+    plan = _sitzplan(session, graph)
+    session.add(
+        Sitzplatz(sitzplan=plan, schueler=graph.schueler_a, reihe=1, position=1)
+    )
+    session.flush()
+
+    session.add(
+        Sitzplatz(sitzplan=plan, schueler=graph.schueler_a, reihe=2, position=3)
+    )
+    with pytest.raises(IntegrityError):
+        session.flush()
+
+
+@pytest.mark.parametrize(
+    "reihen, sitze", [(0, 6), (5, 0), (MAX_RASTER + 1, 6), (5, MAX_RASTER + 1)]
+)
+def test_rastergroesse_bleibt_in_den_grenzen(session, graph, reihen, sitze):
+    session.add(
+        Sitzplan(klasse_id=graph.klasse.id, reihen=reihen, sitze_je_reihe=sitze)
+    )
+    with pytest.raises(IntegrityError):
+        session.flush()
+
+
+def test_platz_ausserhalb_des_rasters_wird_vom_schema_nicht_erkannt(session, graph):
+    """Deliberate gap, documented rather than papered over.
+
+    SQLite allows no subquery in a CHECK, so the schema cannot compare a seat
+    against the grid of its plan. The service layer does it; this test pins
+    down that the database does **not**, so nobody relies on it.
+    """
+    plan = _sitzplan(session, graph)
+    session.add(
+        Sitzplatz(sitzplan=plan, schueler=graph.schueler_a, reihe=99, position=99)
+    )
+    session.flush()
+
+    assert _anzahl(session, "sitzplatz") == 1
+
+
+def test_geloeschter_schueler_raeumt_seinen_platz(session, graph):
+    plan = _sitzplan(session, graph)
+    session.add(
+        Sitzplatz(sitzplan=plan, schueler=graph.schueler_a, reihe=1, position=1)
+    )
+    session.commit()
+
+    session.delete(graph.schueler_a)
+    session.commit()
+
+    assert _anzahl(session, "sitzplatz") == 0
+    assert _anzahl(session, "sitzplan") == 1
+
+
+def test_geloeschte_klasse_nimmt_den_sitzplan_mit(session, graph):
+    plan = _sitzplan(session, graph)
+    session.add(
+        Sitzplatz(sitzplan=plan, schueler=graph.schueler_a, reihe=1, position=1)
+    )
+    session.commit()
+
+    session.delete(graph.schuljahr)
+    session.commit()
+
+    assert _anzahl(session, "sitzplan") == 0
+    assert _anzahl(session, "sitzplatz") == 0
