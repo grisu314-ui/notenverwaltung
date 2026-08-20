@@ -67,6 +67,21 @@ VORGABE_SITZE_JE_REIHE = 6
 MIN_RASTER = 1
 MAX_RASTER = 12
 
+# Section 3.1: the three groups every new course starts with, per term. Name
+# and weight are editable afterwards; this is a starting point, not a rule.
+#
+# The 3 for Mitarbeit is the point of the whole table. The calculation is
+# single-stage (4.4), so a group weighs more the more grades it holds, and
+# participation grades accumulate one by one over the term (5.6). At a weight
+# in the order of the other groups they would end up the heaviest item on the
+# report.
+BEZEICHNUNG_MITARBEIT = "Mitarbeit"
+VORGABE_NOTENGRUPPEN: tuple[tuple[str, Decimal, int], ...] = (
+    ("Klassenarbeit", Decimal("70"), 1),
+    ("Kleiner Nachweis", Decimal("30"), 2),
+    (BEZEICHNUNG_MITARBEIT, Decimal("3"), 3),
+)
+
 
 def _in_clause(column: str, allowed: Iterable[str]) -> str:
     """SQL ``IN`` predicate over the fixed vocabulary from :mod:`app.enums`.

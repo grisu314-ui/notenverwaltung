@@ -222,7 +222,9 @@ def test_ein_anderes_schuljahr_bleibt_beim_loeschen_unversehrt(session, bestand)
     assert [j.bezeichnung for j in session.query(Schuljahr).all()] == ["2027/28"]
     assert zeilen(session, Klasse) == 1
     assert zeilen(session, Kurs) == 1
-    assert zeilen(session, Notengruppe) == 1
+    # The one created by hand plus the six default groups of the new course
+    # (three per term, 3.1) -- all of them belong to the year that stays.
+    assert zeilen(session, Notengruppe) == 1 + 6
     assert zeilen(session, Leistung) == 1
     assert zeilen(session, Note) == 1
     assert zeilen(session, NoteHistorie) == 1

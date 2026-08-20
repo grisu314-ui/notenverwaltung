@@ -1,6 +1,7 @@
 """The seating plan of a class (specification 5.6).
 
-A view onto pupils, not a way to enter grades: nothing here touches a Note.
+A view onto pupils. The one grade it touches is the participation grade of
+the current day -- see :func:`mitarbeitsnote` at the end of this module.
 
 Two rules of the section need code rather than a constraint, because SQLite
 allows no subquery in a CHECK:
@@ -17,18 +18,29 @@ away in the meantime.
 
 import logging
 from dataclasses import dataclass
+from datetime import date
+from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.clock import heute_lokal
 from app.db.models import (
+    BEZEICHNUNG_MITARBEIT,
     MAX_RASTER,
     MIN_RASTER,
+    Halbjahr,
     Klasse,
+    Kurs,
+    Leistung,
+    Note,
+    Notengruppe,
     Schueler,
     Sitzplan,
     Sitzplatz,
 )
+from app.enums import NoteStatus
+from app.services import noten as notendienst
 from app.services.fehler import Verwaltungsfehler
 from app.services.settings import lies_einstellungen
 from app.services.sorting import namensschluessel
@@ -327,3 +339,122 @@ def setze_raster(
     sitzplan.sitze_je_reihe = sitze_je_reihe
     session.flush()
     return sitzplan
+
+
+# ---------------------------------------------------------------------------
+# The participation grade of the day (5.6)
+#
+# The only place the seating plan writes a grade. It is meant for the moment
+# in a lesson when something stands out -- in either direction -- so the
+# normal case is that on a given day nobody or only one or two pupils get one.
+#
+# Everything below builds on the ordinary grade entry: same Note row, same
+# history, same rules. There is no second way of calculating anything.
+# ---------------------------------------------------------------------------
+
+
+def halbjahr_zum_datum(kurs: Kurs, datum: date) -> Halbjahr | None:
+    """The term of the course's school year that contains this date."""
+    for halbjahr in kurs.klasse.schuljahr.halbjahre:
+        if halbjahr.beginn <= datum <= halbjahr.ende:
+            return halbjahr
+    return None
+
+
+def _mitarbeitsgruppe(
+    session: Session, kurs: Kurs, halbjahr: Halbjahr
+) -> Notengruppe | None:
+    """The group named "Mitarbeit" of this course and term.
+
+    Found by name, not by a flag on the row. New courses get the group as a
+    default (3.1); rename it and this stops finding it -- which is why the
+    caller refuses loudly instead of creating a group whose weight would move
+    a report grade.
+    """
+    gruppen = session.execute(
+        select(Notengruppe).where(
+            Notengruppe.kurs_id == kurs.id, Notengruppe.halbjahr_id == halbjahr.id
+        )
+    ).scalars()
+    for gruppe in gruppen:
+        if gruppe.bezeichnung.strip().casefold() == BEZEICHNUNG_MITARBEIT.casefold():
+            return gruppe
+    return None
+
+
+def bezeichnung_der_tagesleistung(datum: date) -> str:
+    return f"{BEZEICHNUNG_MITARBEIT} {datum.strftime('%d.%m.%Y')}"
+
+
+def _tagesleistung(
+    session: Session, gruppe: Notengruppe, datum: date
+) -> Leistung | None:
+    bezeichnung = bezeichnung_der_tagesleistung(datum)
+    for leistung in gruppe.leistungen:
+        if leistung.datum == datum and leistung.bezeichnung == bezeichnung:
+            return leistung
+    return None
+
+
+def mitarbeitsnote(
+    session: Session,
+    kurs: Kurs,
+    schueler: Schueler,
+    notenwert: Decimal,
+    notiz: str | None = None,
+    datum: date | None = None,
+) -> Note:
+    """Award one participation grade for today. Caller commits.
+
+    Always ``gewertet``: there is no performance somebody failed to deliver,
+    so the other two statuses have no meaning here. A grade given by mistake
+    is deleted, not reclassified.
+
+    The assessment for the day is created on the first grade of that day, not
+    in advance. A pupil who gets nothing has no row -- that is not a missing
+    value, it is no performance, and it changes no calculation (4.4).
+    """
+    datum = datum or heute_lokal()
+    if kurs.klasse_id != schueler.klasse_id:
+        raise Verwaltungsfehler(
+            "Der Kurs gehört nicht zu der Klasse, in der dieser Schüler ist."
+        )
+
+    halbjahr = halbjahr_zum_datum(kurs, datum)
+    if halbjahr is None:
+        raise Verwaltungsfehler(
+            f"Der {datum.strftime('%d.%m.%Y')} liegt in keinem Halbjahr des "
+            f"Schuljahres {kurs.klasse.schuljahr.bezeichnung}. In den Ferien lässt "
+            "sich keine Mitarbeitsnote eintragen."
+        )
+
+    gruppe = _mitarbeitsgruppe(session, kurs, halbjahr)
+    if gruppe is None:
+        raise Verwaltungsfehler(
+            f"Der Kurs {kurs.fach} hat im {halbjahr.nummer}. Halbjahr keine "
+            f"Notengruppe „{BEZEICHNUNG_MITARBEIT}“. Bitte in der Verwaltung "
+            "anlegen — die Anwendung legt sie nicht selbst an, weil ihr Gewicht "
+            "die Note verändert."
+        )
+
+    leistung = _tagesleistung(session, gruppe, datum)
+    if leistung is None:
+        leistung = notendienst.lege_leistung_an(
+            session,
+            gruppe,
+            bezeichnung_der_tagesleistung(datum),
+            datum,
+            Decimal("1.0"),
+        )
+
+    note = notendienst.setze_note(
+        session, leistung, schueler, NoteStatus.GEWERTET, notenwert
+    )
+    # Set after the grade: setze_note returns early when value and status did
+    # not change, and a note that only got a new remark still has to be saved.
+    note.notiz = (notiz or "").strip() or None
+    session.flush()
+    logger.info(
+        "Mitarbeitsnote für Schüler %s in Kurs %s am %s", schueler.id, kurs.id, datum
+    )
+    return note

@@ -11,6 +11,7 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from app.db.models import (
+    VORGABE_NOTENGRUPPEN,
     Halbjahr,
     Klasse,
     Kurs,
@@ -159,7 +160,13 @@ def lege_kurs_an(
     gewicht_halbjahr_1: Decimal | None = None,
     gewicht_halbjahr_2: Decimal | None = None,
 ) -> Kurs:
-    """Create a course; all active pupils of the class join it (3.1)."""
+    """Create a course; all active pupils join it, with the default groups (3.1).
+
+    The three default Notengruppen are created per term, so six rows. They are
+    a starting point: name, weight and number are editable afterwards, and an
+    empty one can be deleted. Existing courses are never given them
+    retroactively -- that would reach into grades already calculated.
+    """
     kurs = Kurs(klasse=klasse, fach=fach.strip(), notiz=notiz or None)
     if gewicht_halbjahr_1 is not None:
         _pruefe_gewicht(gewicht_halbjahr_1, "Das Gewicht von Halbjahr 1")
@@ -173,6 +180,18 @@ def lege_kurs_an(
     for schueler in klasse.schueler:
         if schueler.ist_aktiv:
             session.add(Kursteilnahme(kurs=kurs, schueler=schueler, ist_aktiv=True))
+
+    for halbjahr in klasse.schuljahr.halbjahre:
+        for bezeichnung, gewicht, reihenfolge in VORGABE_NOTENGRUPPEN:
+            session.add(
+                Notengruppe(
+                    kurs=kurs,
+                    halbjahr=halbjahr,
+                    bezeichnung=bezeichnung,
+                    gewicht=gewicht,
+                    reihenfolge=reihenfolge,
+                )
+            )
     session.flush()
     return kurs
 
