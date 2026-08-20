@@ -35,6 +35,13 @@
     melde("NICHT gespeichert – keine Verbindung", "fehler");
   });
 
+  // No answer within the configured limit -- the connection may be gone
+  // without the phone having said so.
+  document.body.addEventListener("htmx:timeout", function (ereignis) {
+    if (!betrifftSitzplan(ereignis)) return;
+    melde("NICHT gespeichert – keine Antwort", "fehler");
+  });
+
   // The server answered and refused. Its sentence says why, so it is shown
   // instead of a generic one; htmx does not swap a 4xx by itself.
   document.body.addEventListener("htmx:responseError", function (ereignis) {

@@ -89,3 +89,16 @@ def test_statische_dateien_tragen_eine_versionsmarke(client, graph):
 
     assert f"/static/stil.css?v={STATIKVERSION}" in antwort.text
     assert STATIKVERSION.isdigit() and STATIKVERSION != "0"
+
+
+def test_htmx_bekommt_eine_zeitgrenze(client, graph):
+    """A request that hangs has to become visible as a failure.
+
+    Not every device reports a dropped connection: an Android phone keeps the
+    request open in flight mode and sends it once the network returns. Without
+    a limit the row sits on "speichert ..." indefinitely.
+    """
+    antwort = client.get(f"/klassen/{graph.klasse.id}")
+
+    assert 'name="htmx-config"' in antwort.text
+    assert '"timeout":30000' in antwort.text

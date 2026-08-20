@@ -39,6 +39,15 @@
     zustand(zeile, "NICHT gespeichert – keine Verbindung", "fehler");
   });
 
+  // No answer within the configured limit. The phone never reported the lost
+  // connection -- observed in the classroom -- so the limit is what turns a
+  // request that hangs into a visible failure.
+  document.body.addEventListener("htmx:timeout", function (ereignis) {
+    var zeile = zeileVon(ereignis);
+    if (!zeile) return;
+    zustand(zeile, "NICHT gespeichert – keine Antwort", "fehler");
+  });
+
   // Server answered, but refused.
   document.body.addEventListener("htmx:responseError", function (ereignis) {
     var zeile = zeileVon(ereignis);
