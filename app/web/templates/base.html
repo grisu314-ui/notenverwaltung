@@ -5,12 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block titel %}Notenverwaltung{% endblock %}</title>
   <link rel="stylesheet" href="/static/stil.css?v={{ statikversion }}">
-  {# 30 seconds, then the request counts as lost. Without a limit a request
+  {# 15 seconds, then the request counts as lost. Without a limit a request
      can hang forever: an Android phone does not always report a dropped
      connection, it holds the request and sends it when the network returns.
-     The row then sits on "speichert ..." with nothing to say how long. Thirty
-     seconds is long enough to walk to a better spot in the classroom. #}
-  <meta name="htmx-config" content='{"timeout":30000}'>
+     The row then sits on "speichert ..." with nothing to say how long. The
+     operator chose 15 over 30: long enough for a weak spot in the room, short
+     enough not to keep entering grades into the void. #}
+  <meta name="htmx-config" content='{"timeout":15000}'>
   <script src="/static/htmx.min.js?v={{ statikversion }}" defer></script>
 </head>
 <body>

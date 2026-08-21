@@ -266,7 +266,7 @@ jeder Änderung an der Eingabemaske zu wiederholen**:
 2. **Flugmodus einschalten**, bei einem anderen Schüler eine Note auswählen.
    → Die Zeile zeigt „speichert …" und **bekommt keine Bestätigung**.
    Je nach Gerät wird sie sofort rot („NICHT gespeichert – keine Verbindung")
-   oder erst nach 30 Sekunden („NICHT gespeichert – keine Antwort").
+   oder erst nach 15 Sekunden („NICHT gespeichert – keine Antwort").
 3. Seite zu verlassen versuchen.
    → Der Browser fragt nach.
 4. Flugmodus aus, Seite neu laden.
@@ -278,7 +278,7 @@ abgenommen.
 > **Beide Ausgänge von Schritt 2 sind richtig.** Nicht jedes Gerät meldet den
 > Verbindungsverlust: Ein Android-Telefon hält die Anfrage im Flugmodus offen
 > und schickt sie nach, sobald das Netz wieder da ist — beobachtet im
-> Schulbetrieb. Deshalb steht in `base.html` eine Zeitgrenze von 30 Sekunden;
+> Schulbetrieb. Deshalb steht in `base.html` eine Zeitgrenze von 15 Sekunden;
 > danach meldet htmx `htmx:timeout`, und die Zeile wird rot. Der Wert ist so
 > gewählt, dass man im Klassenraum die Position wechseln kann, bevor er greift.
 >

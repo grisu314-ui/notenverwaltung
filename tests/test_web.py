@@ -101,4 +101,4 @@ def test_htmx_bekommt_eine_zeitgrenze(client, graph):
     antwort = client.get(f"/klassen/{graph.klasse.id}")
 
     assert 'name="htmx-config"' in antwort.text
-    assert '"timeout":30000' in antwort.text
+    assert '"timeout":15000' in antwort.text
