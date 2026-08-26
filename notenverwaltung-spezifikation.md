@@ -1,9 +1,9 @@
 # Notenverwaltung – Projektspezifikation
 
-**Version:** 1.2 · **Stand:** 19.08.2026
-**Zweck:** Beschreibt, *was* gebaut wurde, nicht *wie*. Version 1.2 ergänzt den
-Sitzplan (5.6, dazu die beiden Entitäten in 3.1); er ist inzwischen umgesetzt.
-Die Änderungslisten stehen gesammelt am Ende.
+**Version:** 1.3 · **Stand:** 19.08.2026
+**Zweck:** Beschreibt, *was* gebaut wurde, nicht *wie*. Version 1.2 ergänzte den
+Sitzplan (5.6), Version 1.3 das Merkmal *arbeitet digital* und die beiden
+Zahlen, die daraus folgen. Die Änderungslisten stehen gesammelt am Ende.
 **Auftraggeber/Betreiber/Alleinnutzer:** eine Lehrkraft an einer berufsbildenden Schule (Rheinland-Pfalz).
 
 ---
@@ -69,10 +69,11 @@ Ein Schuljahr wird immer mit **beiden** Halbjahren angelegt. Ohne das zweite ist
 Eine Klasse gehört zu genau einem Schuljahr.
 
 **Schüler**
-`id`, `vorname`, `nachname`, `klasse_id`, `listennummer` (optional), `foto` (BLOB, nullable), `foto_geaendert_am`, `notiz`, `ist_aktiv`
+`id`, `vorname`, `nachname`, `klasse_id`, `listennummer` (optional), `foto` (BLOB, nullable), `foto_geaendert_am`, `notiz`, `ist_aktiv`, `arbeitet_digital`
 
 - `ist_aktiv = false` statt Löschen, wenn ein Schüler die Klasse verlässt. Noten bleiben erhalten.
 - Ein Schüler gehört zu genau einer Klasse pro Schuljahr.
+- `arbeitet_digital` — ob der Schüler im Unterricht mit einem eigenen Gerät arbeitet. **Reine Anzeige für die Lehrkraft** (5.1, 5.6). Das Merkmal hat keine Wirkung auf die Notenberechnung, den Export oder die Kursteilnahme; wer es dort einbaut, hat es missverstanden. Vorgabe für neue und bestehende Schüler: **false**. Ein zu hoch geschätzter Kopienbedarf kostet Papier, ein zu niedrig geschätzter kostet eine Unterrichtsstunde.
 
 **Kurs**
 `id`, `klasse_id`, `fach` (Bezeichnung), `gewicht_halbjahr_1`, `gewicht_halbjahr_2`, `notiz`
@@ -245,6 +246,15 @@ Die Nummerierung folgt Version 1.0. T-5, T-6 und T-10 prüften Punkteeingabe und
 - Umschaltbare Sortierung: **nach Vorname** oder **nach Nachname**. Die Einstellung wird persistiert.
 - Klick auf einen Schüler öffnet die Schüleransicht.
 - Einstieg zum Anlegen neuer Schüler inkl. Fotoerfassung.
+- **Zwei Zahlen über den Kacheln**, beide über die **aktiven** Schüler der Klasse:
+
+  | Beschriftung | Bedeutung |
+  |---|---|
+  | Schüleranzahl | Anzahl der aktiven Schüler |
+  | Papiertiger | Anzahl derer mit `arbeitet_digital = false` |
+
+  „Papiertiger" ist die Zahl der Papierkopien, die für diese Klasse mitzubringen sind. Sie ist der Zweck des Merkmals, nicht ein Nebenprodukt: Auf sie verlässt sich die Lehrkraft, bevor sie den Raum betritt.
+- Die Kachel eines Schülers mit `arbeitet_digital = true` ist **hellgrün hinterlegt**, dazu ein Merkmal, das nicht von der Farbe abhängt (5.6).
 
 ### 5.2 Schüleransicht
 
@@ -252,6 +262,7 @@ Die Nummerierung folgt Version 1.0. T-5, T-6 und T-10 prüften Punkteeingabe und
 - Zeigt: Foto, Vor- und Nachname, Klasse, Schuljahr.
 - Zeigt **sämtliche Noten des Schülers**, gruppiert nach Kurs/Fach, innerhalb des Kurses nach Notengruppe, chronologisch.
 - Pro Kurs: Halbjahresnote(n), Jahresnote, ggf. Überschreibung mit Begründung.
+- **Einstieg in die Verwaltung dieses Schülers.** Von hier führt ein Weg nach `/verwaltung/schueler/{id}` — dorthin, wo Name, Listennummer, Foto, `ist_aktiv` und `arbeitet_digital` gepflegt werden. Ohne ihn ist die Verwaltungsseite nur über den Umweg Klasse → Verwaltung erreichbar.
 
 ### 5.3 Kurs-/Fachübersicht
 
@@ -289,6 +300,14 @@ Der Plan ist ein **Raster aus Reihen und Sitzen je Reihe**. Beide Zahlen sind un
 - **Gänge und Lücken entstehen durch leere Plätze**, nicht durch eine eigene Raumgeometrie. Frei auf einer Fläche platzierbare Tische gibt es nicht (Begründung unter „Bedienung").
 - Das **Verkleinern des Rasters wird abgewiesen**, solange dabei ein besetzter Platz wegfiele. Die Meldung nennt die betroffenen Schüler. Ein stillschweigendes Räumen findet nicht statt.
 
+#### Wer digital arbeitet
+
+Ein Schüler mit `arbeitet_digital = true` (3.1) ist auf seinem Platz **hellgrün hinterlegt**. Weil Farbe allein keine Information trägt, steht zusätzlich ein von der Farbe unabhängiges Merkmal am Platz; welches, entscheidet die Umsetzung, aber es muss ohne Farbwahrnehmung erkennbar sein und **im Ausdruck erhalten bleiben** — Browser lassen Hintergrundfarben beim Drucken oft weg.
+
+Über dem Raster steht dieselbe Zahl wie in der Klassenansicht: **Papiertiger**, die Anzahl der aktiven Schüler ohne eigenes Gerät. Sie steht hier, weil die Lehrkraft im Raum auf den Sitzplan schaut und nicht in die Klassenansicht.
+
+Die Markierung gehört in den **Ausdruck** (siehe „Drucken").
+
 #### Belegung
 
 - Ein Platz trägt **höchstens einen** Schüler. Ein Doppeltisch sind zwei Plätze nebeneinander, nicht ein Platz mit zwei Personen.
@@ -309,7 +328,7 @@ Maßstab ist das Telefon, einhändig im Stehen gehalten (10). Daraus folgt:
 
 #### Drucken
 
-Der Plan lässt sich als eine Seite drucken: das Raster **mit Fotos und Namen**, ohne Bedienelemente. Ohne Fotos hätte der Ausdruck für den Zweck zu wenig Wert; der Betreiber hat entschieden, dass die Ausdrucke seinen Besitz nicht verlassen.
+Der Plan lässt sich als eine Seite drucken: das Raster **mit Fotos und Namen**, ohne Bedienelemente. Die Markierung „arbeitet digital" und die Zahl „Papiertiger" gehören dazu. Ohne Fotos hätte der Ausdruck für den Zweck zu wenig Wert; der Betreiber hat entschieden, dass die Ausdrucke seinen Besitz nicht verlassen.
 
 Einen Export in ein Dateiformat gibt es nicht — kein PDF, kein XLSX. Der Ausdruck **enthält Klarnamen und Lichtbilder** und liegt damit, wie jeder Export (8), außerhalb der Reichweite der Löschfunktion (11).
 
@@ -345,6 +364,7 @@ Der einzige Weg, auf dem der Sitzplan eine Note berührt. Gedacht für den Momen
 #### Ausdrücklich nicht Bestandteil
 
 - **Keine Anwesenheiten, keine Fehlzeiten.** Das ist und bleibt ein Nicht-Ziel (1). Ein Sitzplan lädt dazu ein; er ist dafür nicht der Einstieg.
+- **Keine Auswertung des Merkmals „arbeitet digital" über die Anzeige hinaus.** Es färbt eine Kachel und zählt eine Zahl, sonst nichts (3.1).
 - **Keine Notenanzeige im Plan.** Der Plan zeigt Foto und Name, keine Noten und keinen Notenstand. Eingetragen wird ausschließlich die Mitarbeitsnote des Tages (siehe oben), und auch die erscheint danach nicht auf dem Platz.
 - Kein zweiter Plan je Klasse, keine Klausurordnung, kein Duplizieren.
 - Keine frei platzierbaren Tische, kein Zoom, kein Ziehen.
@@ -431,6 +451,18 @@ Daraus folgt konkret:
 - Es dürfen keine Daten die Anwendung verlassen außer durch den ausdrücklich ausgelösten Export.
 
 Die Klärung der Genehmigung liegt beim Auftraggeber und ist keine Aufgabe des Entwicklungsprojekts.
+
+---
+
+## Änderungen gegenüber Version 1.2
+
+| Abschnitt | Änderung | Grund |
+|---|---|---|
+| 3.1 | `schueler.arbeitet_digital` ergänzt, Vorgabe `false` | Wunsch des Betreibers. Reine Anzeige — ausdrücklich ohne Wirkung auf Berechnung, Export und Kursteilnahme |
+| 5.1 | Zwei Zahlen über den Kacheln: **Schüleranzahl** und **Papiertiger** | „Papiertiger" ist die Zahl der mitzubringenden Kopien und der eigentliche Zweck des Merkmals |
+| 5.1, 5.6 | Kachel eines digital arbeitenden Schülers hellgrün, dazu ein farbunabhängiges Merkmal | Farbe allein trägt keine Information und überlebt den Ausdruck nicht zuverlässig |
+| 5.2 | Einstieg in die Verwaltungsansicht des Schülers ergänzt | Die Seite gab es, der Weg dorthin fehlte |
+| 5.6 | „Papiertiger" auch über dem Raster; Markierung im Ausdruck | Im Raum wird auf den Sitzplan geschaut, nicht in die Klassenansicht |
 
 ---
 
