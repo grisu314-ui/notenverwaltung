@@ -376,3 +376,34 @@ def test_geloeschte_klasse_nimmt_den_sitzplan_mit(session, graph):
 
     assert _anzahl(session, "sitzplan") == 0
     assert _anzahl(session, "sitzplatz") == 0
+
+
+def test_arbeitet_digital_ist_nicht_null_und_hat_die_vorgabe_false(session, graph):
+    """A NOT NULL column with a server default, or the migration cannot run.
+
+    SQLite refuses to add a NOT NULL column to a table that already holds
+    rows without one; every pupil that existed before migration 0003 starts
+    at false.
+    """
+    spalten = {
+        zeile[1]: zeile
+        for zeile in session.connection()
+        .exec_driver_sql("PRAGMA table_info(schueler)")
+        .fetchall()
+    }
+    _, _, typ, nicht_null, vorgabe, _ = spalten["arbeitet_digital"]
+
+    assert typ == "BOOLEAN"
+    assert nicht_null == 1
+    assert vorgabe is not None
+
+    session.add(Schueler(vorname="Ohne", nachname="Angabe", klasse_id=graph.klasse.id))
+    session.flush()
+    assert (
+        session.connection()
+        .exec_driver_sql(
+            "SELECT count(*) FROM schueler WHERE arbeitet_digital IS NULL"
+        )
+        .scalar()
+        == 0
+    )

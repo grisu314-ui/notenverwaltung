@@ -173,6 +173,10 @@ class Schueler(Base):
     ``ist_aktiv = False`` replaces deletion when a pupil leaves; the grades
     stay. Real deletion exists only through the explicit delete function
     (section 11) and is carried by the database-side cascades.
+
+    ``arbeitet_digital`` defaults to False, for both new and existing rows.
+    The default runs in the harmless direction: too many paper copies costs
+    paper, too few costs a lesson.
     """
 
     __tablename__ = "schueler"
@@ -190,6 +194,13 @@ class Schueler(Base):
     foto_geaendert_am: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     notiz: Mapped[str | None] = mapped_column(Text, nullable=True)
     ist_aktiv: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Section 3.1: whether the pupil works on a device of their own. Display
+    # only -- it must never reach the calculation, the export or the course
+    # enrolment. Its two effects are the copy count of 5.1 and the marking on
+    # the seat in 5.6.
+    arbeitet_digital: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
 
     klasse: Mapped["Klasse"] = relationship(back_populates="schueler")
     kursteilnahmen: Mapped[list["Kursteilnahme"]] = relationship(

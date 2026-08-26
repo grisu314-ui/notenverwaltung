@@ -6,3 +6,4 @@
   <span class="portrait klein platzhalter" aria-hidden="true">{{ (s.vorname[:1] ~ s.nachname[:1]) | upper }}</span>
 {% endif %}
 <span class="sitzname">{{ s.vorname | anzeigename(s.nachname, einstellungen.namensanzeige) }}</span>
+{% if s.arbeitet_digital %}{% include "_digitalpunkt.html" %}{% endif %}

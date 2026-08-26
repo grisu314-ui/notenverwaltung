@@ -70,6 +70,7 @@ def aendern(
     listennummer: str = Form(""),
     notiz: str = Form(""),
     ist_aktiv: bool = Form(False),
+    arbeitet_digital: bool = Form(False),
     session: Session = Depends(datenbanksitzung),
 ):
     schueler = hole(session, Schueler, schueler_id)
@@ -83,6 +84,9 @@ def aendern(
         # ist_aktiv = False replaces deletion when a pupil leaves; the grades
         # stay (3.1).
         schueler.ist_aktiv = ist_aktiv
+        # Both are checkboxes: an unticked one sends nothing, so the default
+        # above is what switches the flag off again (3.1).
+        schueler.arbeitet_digital = arbeitet_digital
         session.commit()
     return RedirectResponse(
         f"/verwaltung/schueler/{schueler_id}?meldung=gespeichert", WEITERLEITUNG

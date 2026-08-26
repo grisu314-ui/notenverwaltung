@@ -156,3 +156,47 @@ def test_namen_in_der_ansicht_werden_maskiert(client, session, graph):
     antwort = client.get(f"/klassen/{graph.klasse.id}")
     assert "<b>Ärger</b>" not in antwort.text
     assert "&lt;b&gt;Ärger&lt;/b&gt;" in antwort.text
+
+
+# ---------------------------------------------------------------------------
+# The two numbers and the marking of "arbeitet digital" (5.1, 3.1)
+# ---------------------------------------------------------------------------
+
+
+def test_die_klassenansicht_zeigt_beide_zahlen(client, session, graph):
+    antwort = client.get(f"/klassen/{graph.klasse.id}")
+
+    assert "Schüleranzahl" in antwort.text
+    assert "Papiertiger" in antwort.text
+    assert "<strong>2</strong>" in antwort.text
+
+
+def test_die_kopienzahl_folgt_dem_merkmal(client, session, graph):
+    """The number the teacher acts on has to move when the data moves."""
+    graph.schueler_a.arbeitet_digital = True
+    session.commit()
+
+    antwort = client.get(f"/klassen/{graph.klasse.id}")
+
+    # Two pupils, one of them digital: two heads, one copy.
+    assert "Schüleranzahl <strong>2</strong>" in antwort.text
+    assert "Papiertiger <strong>1</strong>" in antwort.text
+
+
+def test_nur_die_kachel_eines_digitalen_schuelers_ist_markiert(client, session, graph):
+    antwort = client.get(f"/klassen/{graph.klasse.id}")
+    assert "digitalpunkt" not in antwort.text
+
+    graph.schueler_a.arbeitet_digital = True
+    session.commit()
+
+    antwort = client.get(f"/klassen/{graph.klasse.id}")
+    assert antwort.text.count("digitalpunkt") == 1
+    assert "schuelerkachel digital" in antwort.text
+
+
+def test_die_schueleransicht_fuehrt_in_die_verwaltung(client, graph):
+    """The management page existed; the way into it did not (5.2)."""
+    antwort = client.get(f"/schueler/{graph.schueler_a.id}")
+
+    assert f'href="/verwaltung/schueler/{graph.schueler_a.id}"' in antwort.text
