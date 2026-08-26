@@ -226,3 +226,60 @@ def test_unvollstaendiges_datum_ergibt_eine_deutsche_seite(client):
     )
     assert antwort.status_code == 400
     assert "Eingabe unvollständig" in antwort.text
+
+
+# ---------------------------------------------------------------------------
+# "arbeitet digital" (specification 3.1)
+# ---------------------------------------------------------------------------
+
+
+def _schueler_formular(**abweichend) -> dict:
+    felder = {"vorname": "Änne", "nachname": "Öztürk", "listennummer": "", "notiz": ""}
+    felder.update(abweichend)
+    return felder
+
+
+def test_das_merkmal_arbeitet_digital_laesst_sich_setzen(client, graph, session):
+    antwort = client.post(
+        f"/verwaltung/schueler/{graph.schueler_a.id}",
+        data=_schueler_formular(ist_aktiv="true", arbeitet_digital="true"),
+    )
+
+    assert antwort.status_code == 200
+    session.expire_all()
+    assert session.get(Schueler, graph.schueler_a.id).arbeitet_digital is True
+
+
+def test_das_merkmal_laesst_sich_auch_wieder_abschalten(client, graph, session):
+    """The case a checkbox loses: an unticked box sends nothing at all."""
+    graph.schueler_a.arbeitet_digital = True
+    session.commit()
+
+    antwort = client.post(
+        f"/verwaltung/schueler/{graph.schueler_a.id}",
+        data=_schueler_formular(ist_aktiv="true"),  # box not sent
+    )
+
+    assert antwort.status_code == 200
+    session.expire_all()
+    assert session.get(Schueler, graph.schueler_a.id).arbeitet_digital is False
+
+
+def test_das_formular_bietet_das_ankreuzfeld_an(client, graph):
+    antwort = client.get(f"/verwaltung/schueler/{graph.schueler_a.id}")
+
+    assert 'name="arbeitet_digital"' in antwort.text
+    assert "arbeitet digital" in antwort.text
+
+
+def test_das_merkmal_laesst_die_noten_in_ruhe(client, graph, session):
+    """Specification 3.1: display only, no effect on any grade."""
+    vorher = graph.note.notenwert
+
+    client.post(
+        f"/verwaltung/schueler/{graph.schueler_a.id}",
+        data=_schueler_formular(ist_aktiv="true", arbeitet_digital="true"),
+    )
+
+    session.expire_all()
+    assert session.get(Schueler, graph.schueler_a.id).noten[0].notenwert == vorher

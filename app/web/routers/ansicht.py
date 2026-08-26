@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Klasse, Kurs, Schueler
 from app.services import kursblatt as kursblattdienst
+from app.services.klasse import zahlen as klassenzahlen
 from app.services import suche as suchdienst
 from app.services.schuelerblatt import blatt
 from app.services.settings import lies_einstellungen
@@ -42,6 +43,7 @@ def klassenansicht(
             "klasse": klasse,
             "kurse": sortiert_nach_bezeichnung(klasse.kurse, "fach"),
             "schueler": sortierte_schueler(aktive, einstellungen.sortierung),
+            "zahlen": klassenzahlen(session, klasse),
             "einstellungen": einstellungen,
             "ziel": f"/klassen/{klasse_id}",
         },

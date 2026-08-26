@@ -17,6 +17,11 @@
     </ul>
   {% endif %}
 
+  <p class="klassenzahlen">
+    <span>Schüleranzahl <strong>{{ zahlen.schueleranzahl }}</strong></span>
+    <span>Papiertiger <strong>{{ zahlen.papiertiger }}</strong></span>
+  </p>
+
   {% include "_umschalter.html" %}
 
   {% if schueler %}

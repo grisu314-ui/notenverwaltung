@@ -382,3 +382,55 @@ def test_der_kurs_bleibt_beim_umsetzen_erhalten(client, session, graph):
 
     assert f"&amp;kurs={kurs.id}" in antwort.text
     assert "amp;amp;" not in antwort.text
+
+
+# ---------------------------------------------------------------------------
+# "arbeitet digital" on the plan (specification 5.6)
+# ---------------------------------------------------------------------------
+
+
+def test_der_sitzplan_zeigt_dieselben_zahlen_wie_die_klassenansicht(
+    client, session, graph
+):
+    graph.schueler_a.arbeitet_digital = True
+    session.commit()
+
+    plan = client.get(url(graph))
+    klasse = client.get(f"/klassen/{graph.klasse.id}")
+
+    for zeile in ("Schüleranzahl <strong>2</strong>", "Papiertiger <strong>1</strong>"):
+        assert zeile in plan.text, zeile
+        assert zeile in klasse.text, zeile
+
+
+def test_der_platz_eines_digitalen_schuelers_ist_markiert(client, session, graph):
+    client.post(
+        f"{url(graph)}/platz/1/1", data={"schueler_id": graph.schueler_a.id}, headers=HTMX
+    )
+
+    ohne = client.get(url(graph))
+    assert "digitalpunkt" not in ohne.text
+
+    graph.schueler_a.arbeitet_digital = True
+    session.commit()
+
+    mit = client.get(url(graph))
+    assert "digitalpunkt" in mit.text
+    assert "platz belegt digital" in mit.text
+
+
+def test_die_markierung_haengt_nicht_allein_an_der_farbe(client, session, graph):
+    """Colour alone carries no information, and print drops backgrounds.
+
+    The dot is a character in the markup, so it survives both.
+    """
+    client.post(
+        f"{url(graph)}/platz/1/1", data={"schueler_id": graph.schueler_a.id}, headers=HTMX
+    )
+    graph.schueler_a.arbeitet_digital = True
+    session.commit()
+
+    antwort = client.get(url(graph))
+
+    assert "●" in antwort.text
+    assert 'title="arbeitet digital"' in antwort.text

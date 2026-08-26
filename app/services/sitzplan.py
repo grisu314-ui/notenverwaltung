@@ -42,6 +42,8 @@ from app.db.models import (
 from app.enums import NoteStatus
 from app.services import noten as notendienst
 from app.services.fehler import Verwaltungsfehler
+from app.services.klasse import Zahlen
+from app.services.klasse import zahlen as klassenzahlen
 from app.services.settings import lies_einstellungen
 from app.services.sorting import namensschluessel
 
@@ -75,6 +77,9 @@ class Blatt:
     sitzplan: Sitzplan
     reihen: tuple[Reihe, ...]
     ohne_platz: tuple[Schueler, ...]
+    # The same two numbers the class view shows (5.1). Counted once, in
+    # app/services/klasse.py, so the two views cannot drift apart.
+    zahlen: Zahlen
 
     @property
     def anzahl_ohne_platz(self) -> int:
@@ -183,6 +188,7 @@ def blatt(session: Session, klasse: Klasse) -> Blatt:
         sitzplan=sitzplan,
         reihen=reihen,
         ohne_platz=tuple(ohne_platz),
+        zahlen=klassenzahlen(session, klasse),
     )
 
 

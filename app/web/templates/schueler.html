@@ -12,8 +12,10 @@
       <h1>{{ s.vorname | anzeigename(s.nachname, einstellungen.namensanzeige) }}</h1>
       <p class="hinweis">
         <a href="/klassen/{{ s.klasse_id }}">{{ s.klasse.bezeichnung }}</a> ·
-        Schuljahr {{ s.klasse.schuljahr.bezeichnung }}
+        Schuljahr {{ s.klasse.schuljahr.bezeichnung }} ·
+        <a href="/verwaltung/schueler/{{ s.id }}">verwalten</a>
         {% if not s.ist_aktiv %}<span class="marker">inaktiv</span>{% endif %}
+        {% if s.arbeitet_digital %}{% include "_digitalpunkt.html" %}{% endif %}
       </p>
     </div>
   </div>

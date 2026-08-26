@@ -65,7 +65,7 @@ Dateisystem, keine externen Dienste. Fotos liegen als BLOB in derselben Datei
 1. `CLAUDE.md` lesen. Es ist die kürzeste Beschreibung dessen, was in diesem
    Projekt gilt, und es hat Vorrang vor Gewohnheiten.
 2. Die Tests laufen lassen (`docs/entwicklung.md`). Das ist der schnellste Weg,
-   dem Code zu vertrauen: 457 Tests, keine Attrappen für die Datenbank, jeder
+   dem Code zu vertrauen: 478 Tests, keine Attrappen für die Datenbank, jeder
    Test baut sein Schema über die echte Migration auf.
 3. `docs/notenlogik.md` lesen. Der fachliche Kern und der einzige Teil, den man
    nicht aus dem Code erschließen sollte.

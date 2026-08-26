@@ -264,7 +264,9 @@ jeder Änderung an der Eingabemaske zu wiederholen**:
 1. Eingabemaske einer Leistung auf dem Handy öffnen, eine Note auswählen.
    → Die Zeile zeigt „gespeichert" mit Uhrzeit.
 2. **Flugmodus einschalten**, bei einem anderen Schüler eine Note auswählen.
-   → Die Zeile wird rot: „NICHT gespeichert – keine Verbindung".
+   → Die Zeile zeigt „speichert …" und **bekommt keine Bestätigung**.
+   Je nach Gerät wird sie sofort rot („NICHT gespeichert – keine Verbindung")
+   oder erst nach 15 Sekunden („NICHT gespeichert – keine Antwort").
 3. Seite zu verlassen versuchen.
    → Der Browser fragt nach.
 4. Flugmodus aus, Seite neu laden.
@@ -272,6 +274,23 @@ jeder Änderung an der Eingabemaske zu wiederholen**:
 
 Ohne Schritt 2 und 3 gilt eine Änderung an der Eingabemaske nicht als
 abgenommen.
+
+> **Beide Ausgänge von Schritt 2 sind richtig.** Nicht jedes Gerät meldet den
+> Verbindungsverlust: Ein Android-Telefon hält die Anfrage im Flugmodus offen
+> und schickt sie nach, sobald das Netz wieder da ist — beobachtet im
+> Schulbetrieb. Deshalb steht in `base.html` eine Zeitgrenze von 15 Sekunden;
+> danach meldet htmx `htmx:timeout`, und die Zeile wird rot. Der Wert ist so
+> gewählt, dass man im Klassenraum die Position wechseln kann, bevor er greift.
+>
+> Was in **keinem** Fall passieren darf: eine grüne Bestätigung ohne
+> Serverantwort. Nur darauf kommt es an. Kommt die Note nach dem Wiedereinschalten
+> doch noch an, ist das in Ordnung — sie war vorher nie als gespeichert
+> ausgewiesen.
+
+Was Schritt 4 **nicht** beweist: dass die zweite Note dauerhaft verloren ist.
+Hält das Gerät die Anfrage offen, wird sie beim Wiederverbinden nachgeholt.
+Entscheidend ist allein, dass bis zur Serverantwort nichts als gespeichert
+angezeigt wurde.
 
 Fällt JavaScript ganz aus, bleibt jede Zeile ein gewöhnliches Formular mit
 Absendeknopf. Auch ein JS-Fehler kann damit keine Note still verschlucken.

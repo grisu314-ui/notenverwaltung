@@ -11,6 +11,7 @@
     <label>Listennummer <input name="listennummer" inputmode="numeric" value="{{ schueler.listennummer if schueler.listennummer is not none else '' }}"></label>
     <label>Notiz <input name="notiz" value="{{ schueler.notiz or '' }}"></label>
     <label class="ankreuz"><input type="checkbox" name="ist_aktiv" value="true" {% if schueler.ist_aktiv %}checked{% endif %}> aktiv</label>
+    <label class="ankreuz"><input type="checkbox" name="arbeitet_digital" value="true" {% if schueler.arbeitet_digital %}checked{% endif %}> arbeitet digital</label>
     <button type="submit">Speichern</button>
   </form>
   <p class="hinweis">Verlässt ein Schüler die Klasse, wird der Haken entfernt statt gelöscht — die Noten bleiben erhalten.</p>
@@ -57,7 +58,7 @@
     kodiert und in der Datenbank gespeichert. Eingebettete Metadaten fallen
     dabei weg.
   </p>
-  <script src="/static/zuschnitt.js" defer></script>
+  <script src="/static/zuschnitt.js?v={{ statikversion }}" defer></script>
 
   <h2>Endgültig löschen</h2>
   <p class="hinweis">
