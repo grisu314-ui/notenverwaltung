@@ -14,5 +14,14 @@ sicherungen/
 
 .pytest_cache/
 
-# Auth-Key für den Tailscale-Sidecar, gehört nicht ins Repository.
+# Auth-Key für den Tailscale-Sidecar und Zugang der Pforte, gehört nicht ins
+# Repository. Die Vorlage .env.example schon.
 .env
+
+# Caddys Zustand auf dem NAS (docker-compose.truenas.yml). Die dort abgelegte
+# Konfiguration enthält den Passwort-Hash der Pforte.
+pforte/
+
+# Knotenzustand des Tailscale-Sidecars auf dem NAS, darin sein Schlüssel.
+# Liegt im selben Arbeitsbaum; `git add -A` nähme ihn sonst mit.
+tailscale/

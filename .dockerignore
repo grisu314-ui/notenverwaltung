@@ -12,6 +12,8 @@ sicherungen
 *.db-wal
 *.db-shm
 .env
+pforte
+tailscale
 README.md
 docs
 notenverwaltung-spezifikation.md

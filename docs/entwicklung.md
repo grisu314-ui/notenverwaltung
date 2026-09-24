@@ -30,7 +30,7 @@ Verzeichnis muss existieren — SQLite legt es nicht an und meldet sonst nur
 .venv/bin/pytest
 ```
 
-478 Tests. Jeder baut sich seine eigene Datenbank **über die Alembic-Migration
+535 Tests. Jeder baut sich seine eigene Datenbank **über die Alembic-Migration
 auf**; `create_all()` wird nirgends verwendet, auch nicht im Test. Damit ist
 die Migration bei jedem Lauf mitgeprüft. Der Lauf bricht ab, wenn
 `NOTENVERWALTUNG_DB` gesetzt ist — Tests fassen keinen konfigurierten
@@ -51,6 +51,8 @@ Wichtige Dateien:
 | `test_sitzplan.py` | den Sitzplan: inaktive Schüler, Raster verkleinern, Tauschen |
 | `test_klassenzahlen.py` | Schüleranzahl und Papiertiger — die Zahl, auf die im Unterricht Verlass sein muss |
 | `test_mitarbeitsnote.py` | Vorgabegruppen und die Mitarbeitsnote, samt Rechenprobe zum Gewicht 3 |
+| `test_web_sitzplan.py` | der Sitzplan über die Weboberfläche, darunter die Schnelleingabe; „heute" ist dort festgelegt |
+| `test_zugang.py` | die Compose-Dateien und das Caddyfile: kein `ports:`, Anwendung nur hinter der Pforte, kein Ausgang nach draußen; der Test-Stack weicht vom produktiven nur in Namen und Pfaden ab |
 
 ## Aufbau
 
@@ -93,7 +95,7 @@ und rendern.
 | `foto.py` | Bilder prüfen und neu kodieren |
 | `export.py` | XLSX und Markdown |
 | `loeschen.py` | endgültiges Löschen samt Verdichten der Datei |
-| `sitzplan.py` | Sitzplan: Raster bauen, Plätze setzen, räumen, tauschen, Mitarbeitsnote |
+| `sitzplan.py` | Sitzplan: Raster bauen, Plätze setzen, räumen, tauschen, Mitarbeitsnote samt Schnelleingabe (`tagesstand`) |
 | `klasse.py` | Schüleranzahl und Papiertiger einer Klasse |
 | `settings.py` | persistierte Einstellungen |
 | `fehler.py` | Datenbankfehler → lesbarer deutscher Satz |
@@ -194,7 +196,7 @@ fehlen nicht, sie sind entschieden.
 
 | Nicht gebaut | Warum |
 |---|---|
-| Authentifizierung, Sessions, Benutzer | Der Zugang wird davor geregelt (Tailscale-ACLs). Nicht geschriebener Auth-Code kann keine Lücke haben |
+| Authentifizierung, Sessions, Benutzer in der Anwendung | Der Zugang wird davor geregelt, auf Infrastrukturebene: Tailscale-ACLs und die Caddy-Pforte mit Basic Auth (`caddy/Caddyfile`). Nicht geschriebener Auth-Code kann keine Lücke haben |
 | TLS | Der Verkehr läuft verschlüsselt durch das Tailnet; ein Zertifikat für einen internen Namen ist Betriebsaufwand ohne Gewinn |
 | Punkteeingabe, Notenschlüssel | Noten werden direkt eingetragen, Umrechnung geschieht außerhalb (siehe `notenlogik.md`) |
 | Offline-Fähigkeit, PWA, Service Worker | Reine Server-Anwendung. Bei Verbindungsverlust wird auf Papier notiert |

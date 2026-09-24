@@ -65,7 +65,7 @@ Architektur: TrueNAS SCALE gibt es nur für x86-64. Ein anderswo gebautes Image
 
 ## Schritt 1 — Datasets und Rechte
 
-Drei Verzeichnisse. Der Stack verwendet **keine benannten Docker-Volumes**,
+Vier Verzeichnisse. Der Stack verwendet **keine benannten Docker-Volumes**,
 sondern ausschließlich absolute Pfade auf dem NAS — damit liegt jeder Zustand
 an einer Stelle, die man sehen, sichern und in einen Snapshot nehmen kann.
 
@@ -73,11 +73,14 @@ an einer Stelle, die man sehen, sichern und in einen Snapshot nehmen kann.
 mkdir -p /mnt/Daten-Z1/apps/notenverwaltung/daten
 mkdir -p /mnt/Daten-Z1/apps/notenverwaltung/sicherungen
 mkdir -p /mnt/Daten-Z1/apps/notenverwaltung/tailscale
+mkdir -p /mnt/Daten-Z1/apps/notenverwaltung/pforte
 
 chown -R 1000:1000 /mnt/Daten-Z1/apps/notenverwaltung/daten \
                    /mnt/Daten-Z1/apps/notenverwaltung/sicherungen
-chown -R root:root /mnt/Daten-Z1/apps/notenverwaltung/tailscale
-chmod 700          /mnt/Daten-Z1/apps/notenverwaltung/tailscale
+chown -R root:root /mnt/Daten-Z1/apps/notenverwaltung/tailscale \
+                   /mnt/Daten-Z1/apps/notenverwaltung/pforte
+chmod 700          /mnt/Daten-Z1/apps/notenverwaltung/tailscale \
+                   /mnt/Daten-Z1/apps/notenverwaltung/pforte
 ```
 
 | Verzeichnis | Inhalt | Eigentümer |
@@ -85,6 +88,7 @@ chmod 700          /mnt/Daten-Z1/apps/notenverwaltung/tailscale
 | `daten/` | die SQLite-Datei | **1000:1000** |
 | `sicherungen/` | die Sicherungskopien | **1000:1000** |
 | `tailscale/` | Knotenzustand des Sidecars | **root:root**, Modus 700 |
+| `pforte/` | Zustand der Caddy-Pforte | **root:root**, Modus 700 |
 
 Die **Anwendung** läuft als UID/GID 1000, nicht als root. Gehört `daten/`
 einem anderen Benutzer, startet der Container zwar, kann aber nicht schreiben;
@@ -95,6 +99,11 @@ Sein Verzeichnis deshalb nicht auf 1000 setzen. In ihm liegt der
 Knotenschlüssel: Bleibt es erhalten, wird der Auth-Key nur beim allerersten
 Start gebraucht. `chmod 700`, weil das ein Anmeldegeheimnis ist.
 
+Die **Pforte** (Caddy) läuft ebenfalls als root. In `pforte/` legt sie ihren
+Zustand ab, darunter eine Kopie ihrer Konfiguration **mit dem Passwort-Hash**
+— deshalb auch hier `chmod 700`. Das Caddyfile selbst liegt nicht dort,
+sondern im Quellbaum (`caddy/Caddyfile`) und kommt mit Schritt 2.
+
 > Die SQLite-Datei gehört auf ein **lokales** Dataset, nie auf eine SMB- oder
 > NFS-Freigabe (Spezifikation 2, Punkt 2). Netzwerkdateisysteme setzen die
 > Sperren nicht zuverlässig um, die SQLite für WAL braucht.
@@ -102,6 +111,71 @@ Start gebraucht. `chmod 700`, weil das ein Anmeldegeheimnis ist.
 ---
 
 ## Schritt 2 — Quelle auf das NAS
+
+### Lesezugang zu GitHub (Deploy Key)
+
+Das NAS holt den Quellcode über einen **Deploy Key**: einen SSH-Schlüssel, der
+genau dieses eine Repository lesen darf, nicht schreiben, und nicht abläuft.
+Damit fragt `git fetch` nie wieder nach einer Anmeldung.
+
+**Alles davon liegt auf `Daten-Z1`, nichts in `/root`.** Heimatverzeichnisse
+überstehen ein TrueNAS-Update nicht zuverlässig; ein Schlüssel unter
+`/root/.ssh` wäre nach dem nächsten Update womöglich weg. Das Verzeichnis
+`git-zugang/` liegt neben den Arbeitsbäumen, nicht in ihnen — so taucht es
+weder in `git status` noch im Build-Kontext auf.
+
+Einmalig, als root:
+
+```bash
+mkdir -p /mnt/Daten-Z1/apps/git-zugang
+chmod 700 /mnt/Daten-Z1/apps/git-zugang
+ssh-keygen -t ed25519 -N "" -C "truenas notenverwaltung nur-lesen" \
+    -f /mnt/Daten-Z1/apps/git-zugang/deploy_key
+cat /mnt/Daten-Z1/apps/git-zugang/deploy_key.pub
+```
+
+Ohne Passphrase, sonst fragt jedes `git fetch` wieder nach etwas. Vertretbar,
+weil der Schlüssel nur dieses Repository lesen kann — und wer root auf dem NAS
+hat, hat den Quellbaum ohnehin.
+
+Die ausgegebene Zeile bei GitHub eintragen: Repository → **Settings → Deploy
+keys → Add deploy key**, Titel etwa „TrueNAS (nur lesen)". **„Allow write
+access" nicht ankreuzen.**
+
+GitHubs eigenen Schlüssel festhalten und prüfen:
+
+```bash
+ssh-keyscan -t ed25519 github.com > /mnt/Daten-Z1/apps/git-zugang/known_hosts
+ssh-keygen -lf /mnt/Daten-Z1/apps/git-zugang/known_hosts
+```
+
+Die Ausgabe muss `SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU`
+enthalten — der Fingerabdruck, den GitHub veröffentlicht („GitHub's SSH key
+fingerprints" in der GitHub-Doku). Steht dort etwas anderes: abbrechen.
+
+Verbindung prüfen:
+
+```bash
+ssh -i /mnt/Daten-Z1/apps/git-zugang/deploy_key -o IdentitiesOnly=yes -o UserKnownHostsFile=/mnt/Daten-Z1/apps/git-zugang/known_hosts -T git@github.com
+```
+
+Erwartet: `Hi grisu314-ui/notenverwaltung! You've successfully authenticated,
+but GitHub does not provide shell access.`
+
+Jeder Arbeitsbaum bekommt den Schlüssel über `core.sshCommand` in seiner
+eigenen `.git/config` — die liegt im Arbeitsbaum, also ebenfalls auf
+`Daten-Z1`. Ein bestehender Baum, der noch über HTTPS holt, wird so umgestellt:
+
+```bash
+cd /mnt/Daten-Z1/apps/notenverwaltung
+git remote set-url origin git@github.com:grisu314-ui/notenverwaltung.git
+git config core.sshCommand "ssh -i /mnt/Daten-Z1/apps/git-zugang/deploy_key -o IdentitiesOnly=yes -o UserKnownHostsFile=/mnt/Daten-Z1/apps/git-zugang/known_hosts"
+git fetch origin
+```
+
+`git push` vom NAS aus geht damit nicht — gewollt, das NAS holt nur.
+
+### Der Arbeitsbaum
 
 Der Quellbaum kommt in das Dataset `/mnt/Daten-Z1/apps/notenverwaltung`, also
 **eine Ebene über** `daten/` und `sicherungen/`.
@@ -113,7 +187,8 @@ vorhandenes Verzeichnis ist deshalb:
 ```bash
 cd /mnt/Daten-Z1/apps/notenverwaltung
 git init
-git remote add origin https://github.com/grisu314-ui/notenverwaltung.git
+git remote add origin git@github.com:grisu314-ui/notenverwaltung.git
+git config core.sshCommand "ssh -i /mnt/Daten-Z1/apps/git-zugang/deploy_key -o IdentitiesOnly=yes -o UserKnownHostsFile=/mnt/Daten-Z1/apps/git-zugang/known_hosts"
 git fetch origin
 git checkout -b main origin/main
 ```
@@ -131,13 +206,14 @@ Später aktualisieren mit `git pull` wie gewohnt.
 > den Quellbaum stattdessen in ein Unterverzeichnis `quelle/` — dann liegen
 > Daten und Arbeitsbaum getrennt und dieser Absatz entfällt.
 
-`daten/` und `sicherungen/` stehen in `.gitignore` und in `.dockerignore`.
+`daten/`, `sicherungen/`, `tailscale/` und `pforte/` stehen in `.gitignore`
+und in `.dockerignore`.
 Damit taucht der produktive Bestand weder in `git status` auf noch im
 Build-Kontext, den `docker build` an den Daemon schickt. Einmal nachsehen —
 jetzt, solange dort noch keine echten Daten liegen:
 
 ```bash
-git status --short      # daten/ und sicherungen/ dürfen NICHT auftauchen
+git status --short      # daten/, sicherungen/, tailscale/, pforte/ dürfen NICHT auftauchen
 git clean -nd           # muss leer bleiben
 ```
 
@@ -167,7 +243,7 @@ Bauen Sie mehrmals am selben Tag, hängen Sie eine laufende Nummer an:
 `notenverwaltung:2026-08-11b`.
 
 Im Image ist ausschließlich Code. `.dockerignore` schließt `.env`, `daten/`,
-`sicherungen/` und `*.db` aus, und das Dockerfile kopiert ohnehin nur `app`,
+`sicherungen/`, `tailscale/`, `pforte/` und `*.db` aus, und das Dockerfile kopiert ohnehin nur `app`,
 `migrations`, `scripts`, `alembic.ini` und das Startskript. Es enthält keine
 Daten und kein Geheimnis.
 
@@ -226,44 +302,37 @@ Die Datei steht bewusst **nur einmal** im Projekt, statt hier noch einmal
 abgedruckt zu werden — zwei Kopien laufen auseinander, und eine veraltete
 Compose-Datei bindet im Zweifel das falsche Verzeichnis ein.
 
-**Zwei Werte sind einzutragen:**
+**Ein Wert ist einzutragen:** `notenverwaltung:JJJJ-MM-TT` — der Tag aus
+Schritt 3. Genau so, wie `docker images notenverwaltung` ihn anzeigt.
 
-1. `tailscale/tailscale:VERSION` — **beim ersten Mal `latest` eintragen.**
-   Das läuft, und Sie kommen ohne Umweg zu einem laufenden Stack.
+**Das Tailscale-Image ist festgenagelt** (`tailscale/tailscale:v1.102.2`),
+ebenso die Pforte (`caddy:2.11.4-alpine`). Damit tauscht sich keiner der
+beiden Container beim nächsten Pull unbemerkt aus. Aktualisiert wird von
+Hand, erst im Test-Stack: `betrieb.md`, „Tailscale- und Caddy-Image
+aktualisieren".
 
-   Der Grund für den Platzhalter: Dieser Aufbau setzt voraus, dass das Image
-   von selbst startet und dabei `TS_AUTHKEY` auswertet — das macht das
-   Programm `containerboot`, das erst in neueren Tailscale-Images steckt.
-   Ältere Images führen nur ein blankes `/bin/sh` aus, das sofort endet; der
-   Stack läuft dann nie an (siehe „Störungssuche"). Eine geratene
-   Versionsnummer trifft diesen Fall leicht.
-
-   Die Version Ihres **bestehenden** Tailscale-Containers ist dabei kein
-   guter Anhaltspunkt — sie kann Jahre alt sein und trotzdem laufen, weil
-   dieser Container anders gestartet wird.
-
-   **Sobald der Stack läuft, die Version festnageln.** Sie am laufenden
-   Container ablesen und eintragen:
-
-   ```bash
-   docker exec notenverwaltung-tailscale tailscale version | head -1
-   ```
-
-   Aus `1.90.2` wird `image: tailscale/tailscale:v1.90.2`, dann neu
-   deployen. Damit bleibt der Sidecar auf einem Stand, der nachweislich
-   funktioniert hat, statt sich beim nächsten Pull unbemerkt auszutauschen.
-   `latest` ist der Weg zum ersten Start, nicht der Dauerzustand.
-
-2. `notenverwaltung:JJJJ-MM-TT` — der Tag aus Schritt 3. Genau so, wie
-   `docker images notenverwaltung` ihn anzeigt.
+Eine geratene Tailscale-Version ist gefährlich: Dieser Aufbau setzt voraus,
+dass das Image von selbst startet und dabei `TS_AUTHKEY` auswertet — das
+macht das Programm `containerboot`, das erst in neueren Tailscale-Images
+steckt. Ältere Images führen nur ein blankes `/bin/sh` aus, das sofort
+endet; der Stack läuft dann nie an (siehe „Störungssuche"). Die Version
+Ihres **bestehenden** Tailscale-Containers ist dabei kein guter
+Anhaltspunkt — sie kann Jahre alt sein und trotzdem laufen, weil dieser
+Container anders gestartet wird.
 
 ### Die Volumes
 
-Alle drei sind **absolute Pfade auf dem NAS**, kein benanntes Volume, kein
+Alle sind **absolute Pfade auf dem NAS**, kein benanntes Volume, kein
 `volumes:`-Block am Dateiende:
 
 ```yaml
+      # tailscale
       - /mnt/Daten-Z1/apps/notenverwaltung/tailscale:/var/lib/tailscale
+      # pforte
+      - /mnt/Daten-Z1/apps/notenverwaltung/caddy:/etc/caddy:ro
+      - /mnt/Daten-Z1/apps/notenverwaltung/pforte/daten:/data
+      - /mnt/Daten-Z1/apps/notenverwaltung/pforte/config:/config
+      # notenverwaltung
       - /mnt/Daten-Z1/apps/notenverwaltung/daten:/daten
       - /mnt/Daten-Z1/apps/notenverwaltung/sicherungen:/sicherungen
 ```
@@ -271,7 +340,14 @@ Alle drei sind **absolute Pfade auf dem NAS**, kein benanntes Volume, kein
 Links der Pfad auf dem NAS, rechts der Pfad im Container — die rechte Seite
 ist fest und darf nicht geändert werden: `/daten` steht so im Image
 (`NOTENVERWALTUNG_DB=/daten/notenverwaltung.db`), `/var/lib/tailscale` steht
-in `TS_STATE_DIR`.
+in `TS_STATE_DIR`, `/etc/caddy`, `/data` und `/config` erwartet das
+Caddy-Image.
+
+`caddy/` ist das Verzeichnis **aus dem Quellbaum** — das Caddyfile kommt mit
+`git pull` und liegt nicht als zweite Kopie im Dockge-Verzeichnis. Eingehängt
+wird der Ordner, nicht die einzelne Datei; das empfiehlt die Doku des
+Caddy-Images, weil manche Editoren eine Datei beim Speichern ersetzen statt
+sie zu überschreiben.
 
 Ein benanntes Volume für den Tailscale-Zustand täte es technisch auch, läge
 dann aber unter `/var/lib/docker/volumes/…` — unsichtbar, außerhalb Ihrer
@@ -286,18 +362,34 @@ lokal vorhandenes Image wird auch ohne sie nicht neu geholt.
 
 ### Die `.env` daneben
 
-Im selben Stack-Verzeichnis eine Datei `.env`:
+Im selben Stack-Verzeichnis eine Datei `.env`. Vorlage im Quellbaum:
+`.env.example`.
 
 ```
 TS_AUTHKEY=tskey-auth-...
+PFORTE_USER=lehrer
+PFORTE_HASH='$2a$14$...'
 ```
+
+Den Hash für `PFORTE_HASH` erzeugen — das Passwort wird abgefragt und landet
+nicht in der Shell-Historie:
+
+```bash
+docker run --rm -it caddy:2.11.4-alpine caddy hash-password
+```
+
+**Der Hash steht in einfachen Anführungszeichen.** Er enthält `$`, und ohne
+die Anführungszeichen ersetzt Compose `$2a`, `$14` usw. durch leere
+Variablen. Die Pforte startet dann zwar, aber kein Passwort passt. Wie man
+es prüft und später ändert: README, „Zugang & Passwort ändern".
 
 Bietet Dockges Editor keine `.env` an, legen Sie sie per Shell an — das
 Stack-Verzeichnis liegt dort, wo Dockge konfiguriert ist, üblicherweise
 `/opt/stacks/notenverwaltung/`.
 
-Der Schlüssel gehört dem Tailscale-Sidecar, nicht der Anwendung. **Die
-Anwendung hat kein einziges Geheimnis** und liest genau eine
+Der Schlüssel gehört dem Tailscale-Sidecar, Benutzer und Hash gehören der
+Pforte — nichts davon der Anwendung. **Die Anwendung hat kein einziges
+Geheimnis** und liest genau eine
 Umgebungsvariable, den Datenbankpfad, und der steht fest im Image.
 
 Empfehlenswert ist ein **einmalig verwendbarer** Auth-Key aus der
@@ -324,14 +416,58 @@ Jetzt erst in Dockge auf **Deployen**. Danach:
 2. In den Tailscale-ACLs festlegen, welche Geräte diesen Knoten erreichen
    dürfen. Das ist der eigentliche Grund für den eigenen Sidecar-Knoten
    statt der Mitbenutzung des vorhandenen Tailscale-Containers.
-3. Aufrufen: `http://notenverwaltung:8000/` von einem Gerät im Tailnet.
+3. Aufrufen: `http://notenverwaltung:8000/` von einem Gerät im Tailnet. Der
+   Browser fragt nach Benutzer und Passwort der Pforte.
 
 Wenn nichts kommt, zuerst das Protokoll ansehen:
 
 ```bash
 docker logs notenverwaltung
+docker logs notenverwaltung-pforte
 docker logs notenverwaltung-tailscale
 ```
+
+### Abnahme der Pforte
+
+Einmal nach dem ersten Deploy und nach jeder Änderung an Compose-Datei oder
+Caddyfile. Auf dem NAS:
+
+```bash
+cd /opt/stacks/notenverwaltung
+docker compose config > /dev/null && echo "Datei in Ordnung"
+docker exec notenverwaltung-pforte printenv PFORTE_HASH      # vollständig: $2a$14$…
+docker logs notenverwaltung-pforte 2>&1 | grep '"level":"error"'   # keine Zeile
+docker exec notenverwaltung python -c "import urllib.request as u; u.urlopen('https://example.org', timeout=5)"
+docker ps --format '{{.Names}}\t{{.Ports}}'
+```
+
+Erwartet: Die Anwendung kommt **nicht** nach draußen (Fehlermeldung, meist
+`Temporary failure in name resolution`). Bei `docker ps` steht an keinem der
+drei Container ein veröffentlichter Port — ein solcher sähe aus wie
+`0.0.0.0:8000->8000/tcp`. Ein nacktes `8000/tcp` an der Anwendung ist kein
+veröffentlichter Port, sondern die `EXPOSE`-Angabe aus dem Dockerfile.
+
+`docker compose config` zeigt den Hash mit `$$` statt `$`; das ist nur die
+Darstellung. Maßgeblich ist `printenv`. Drei Warnungen im Protokoll der Pforte
+sind normal: `admin endpoint disabled` sowie „HTTP/2" und „HTTP/3 skipped
+because it requires TLS".
+
+Von einem Gerät im Tailnet:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' http://notenverwaltung:8000/                       # 401
+curl -s -o /dev/null -w '%{http_code}\n' -u lehrer:PASSWORT http://notenverwaltung:8000/    # 200
+curl -m 5 http://notenverwaltung:2019/                                                       # keine Antwort
+```
+
+**Nicht `curl -I`:** Das schickt eine HEAD-Anfrage, und die beantwortet die
+Anwendung mit `405`. Durch die Pforte ist man dann zwar gekommen, aber die
+erwartete `200` erscheint nie.
+
+Zum Schluss auf dem Telefon: Passwortabfrage, dann eine Note in einer
+Serieneingabe eintragen und einen Platz im Sitzplan setzen. Beides muss
+„gespeichert" zeigen — damit ist belegt, dass auch die htmx-Anfragen durch die
+Pforte laufen.
 
 ---
 
@@ -358,6 +494,14 @@ solange noch keine echten Daten in der Datenbank stehen.
 | Compose will `notenverwaltung` aus dem Netz ziehen | Tag vertippt, Image nicht vorhanden | `docker images notenverwaltung`, Tag berichtigen |
 | Knoten erscheint nicht im Tailnet | Auth-Key abgelaufen oder verbraucht | Neuen Key erzeugen, `.env` ändern, Stack neu starten |
 | Knoten meldet sich bei **jedem** Neustart neu an | `tailscale/` wird nicht eingehängt oder gehört UID 1000 statt root | Pfad in der Compose-Datei prüfen, `chown -R root:root tailscale` |
+| `PFORTE_USER fehlt` oder `PFORTE_HASH fehlt` | Eintrag fehlt in der `.env` | Ergänzen, siehe Schritt 5 |
+| Browser fragt immer wieder nach dem Passwort, obwohl es stimmt | Hash in der `.env` ohne einfache Anführungszeichen, von Compose zerlegt | `docker exec notenverwaltung-pforte printenv PFORTE_HASH` muss vollständig `$2a$14$…` zeigen. `.env` berichtigen, `docker compose up -d pforte` |
+| `502 Bad Gateway` nach der Passworteingabe | Die Pforte läuft, die Anwendung nicht | `docker logs notenverwaltung` — meist eine ausstehende Migration oder die fehlende Datenbank |
+| Nach der Passworteingabe lädt die Seite endlos | Das Caddyfile leitet an `notenverwaltung` statt an `anwendung` weiter; die Pforte ruft sich selbst auf | `caddy/Caddyfile` aus dem Repository wiederherstellen, `docker compose restart pforte` |
+| Nicht erreichbar, obwohl alle drei Container `Up` zeigen | Der Sidecar wurde allein neu gestartet; die Pforte hängt noch in seinem alten, verwaisten Netz | `docker restart notenverwaltung-pforte` (nachgestellt) |
+| `git fetch`: `Permission denied (publickey)` | Deploy Key nicht bei GitHub eingetragen, oder `core.sshCommand` fehlt in diesem Arbeitsbaum | Schritt 2, „Lesezugang zu GitHub"; `git config core.sshCommand` zeigt, ob er gesetzt ist |
+| `git fetch`: `Host key verification failed` | `git-zugang/known_hosts` fehlt oder ist leer | `ssh-keyscan`-Zeile aus Schritt 2 wiederholen, Fingerabdruck prüfen |
+| `git fetch` fragt wieder nach Benutzer und Passwort | Der Baum holt noch über HTTPS | `git remote set-url origin git@github.com:…`, siehe Schritt 2 |
 | Stack startet in Dockge nicht, ohne brauchbare Meldung | verschiedene | In der Shell nachstellen, siehe unten |
 
 ### Der Stack startet in Dockge nicht
@@ -380,10 +524,10 @@ Dockge heraus, liegt es an Dockge und nicht an dieser Compose-Datei.
 
 Die vier häufigsten Ursachen, in dieser Reihenfolge:
 
-1. **Ein Platzhalter steht noch drin** — `VERSION` oder `JJJJ-MM-TT`. Der
-   Stack startet dann absichtlich nicht.
-2. **`TS_AUTHKEY` kommt nicht an.** Symptom: `required variable TS_AUTHKEY is
-   missing`. Die `.env` muss im selben Verzeichnis liegen wie die
+1. **Ein Platzhalter steht noch drin** — `JJJJ-MM-TT`. Der Stack startet
+   dann absichtlich nicht.
+2. **`TS_AUTHKEY` kommt nicht an** (ebenso `PFORTE_USER`, `PFORTE_HASH`).
+   Symptom: `required variable TS_AUTHKEY is missing`. Die `.env` muss im selben Verzeichnis liegen wie die
    `compose.yaml` des Stacks, nicht im Projektverzeichnis. Prüfen mit
    `docker compose config | grep TS_AUTHKEY`.
 3. **Das Image gibt es lokal nicht** unter genau diesem Tag. Prüfen mit
@@ -402,11 +546,13 @@ Start, nicht danach.
 Error response from daemon: cannot join network namespace of container:
 Container 5073a0… is restarting, wait until the container is running
  ✓ Container notenverwaltung-tailscale   Started
- ⠿ Container notenverwaltung             Starting
+ ⠿ Container notenverwaltung-pforte      Starting
 ```
 
-Diese Meldung ist eine **Folge, nicht die Ursache**. Die Anwendung hängt per
-`network_mode: service:tailscale` im Netz des Sidecars. Läuft der Sidecar
+Diese Meldung ist eine **Folge, nicht die Ursache**. Die Pforte hängt per
+`network_mode: service:tailscale` im Netz des Sidecars. (Bis Version 1.3 der
+Spezifikation hing dort die Anwendung selbst, und die Meldung nannte den
+Container `notenverwaltung`.) Läuft der Sidecar
 nicht, gibt es kein Netz zum Beitreten. Dass Dockge daneben `Started` anzeigt,
 täuscht: Der Container wurde gestartet, beendet sich sofort wieder und wird
 von `restart: unless-stopped` erneut gestartet — eine Schleife.
@@ -423,7 +569,7 @@ Was dort typischerweise steht, und was es bedeutet:
 
 | Im Protokoll | Ursache | Abhilfe |
 |---|---|---|
-| **gar nichts**, `docker ps -a` zeigt `Restarting (0)` und als Kommando `"/bin/sh"` | **Das Tailscale-Image ist zu alt.** Ohne `containerboot` startet nur eine Shell, die sofort endet — Rückgabewert 0, kein Protokoll | Aktuelle Version eintragen, siehe Schritt 5 |
+| **gar nichts**, `docker ps -a` zeigt `Restarting (0)` und als Kommando `"/bin/sh"` | **Das Tailscale-Image ist zu alt.** Ohne `containerboot` startet nur eine Shell, die sofort endet — Rückgabewert 0, kein Protokoll | Die festgenagelte Version aus dem Repository eintragen, siehe Schritt 5 |
 | `invalid key`, `unauthorized`, `key expired` | Auth-Key abgelaufen, schon verbraucht oder falsch kopiert | Neuen Key erzeugen, `.env` ändern, neu deployen |
 | `wgengine`, `tun`, `/dev/net/tun` | Das TUN-Gerät fehlt auf dem Host | `ls -l /dev/net/tun` — fehlt es, `modprobe tun` und den Stack neu deployen |
 | `permission denied` auf `/var/lib/tailscale` | Zustandsverzeichnis gehört nicht root | `chown -R root:root …/tailscale` |
@@ -434,7 +580,7 @@ angelaufen und dann gescheitert; dann steht der Grund im Protokoll.
 
 Solange der Sidecar nicht dauerhaft läuft, ist die zweite Meldung ohne
 Aussagekraft. Erst wenn `docker ps` ihn als `Up` zeigt, lohnt der Blick auf
-`docker logs notenverwaltung`.
+`docker logs notenverwaltung-pforte` und `docker logs notenverwaltung`.
 
 Zum Aufräumen zwischen zwei Versuchen — in der TrueNAS-Shell:
 

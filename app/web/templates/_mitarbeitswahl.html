@@ -1,0 +1,9 @@
+{# Under one pupil in the quick entry: the select, or why there is none.
+   Expects `s`. #}
+{% if kurs and tagesstand and not tagesstand.hindernis %}
+  {% if s.id in tagesstand.teilnehmer %}
+    {% include "_mitarbeitsfeld.html" %}
+  {% else %}
+    <span class="feldhinweis">nicht im Kurs</span>
+  {% endif %}
+{% endif %}

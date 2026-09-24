@@ -293,6 +293,118 @@ def test_ein_ungueltiger_notenwert_wird_abgewiesen(session, graph, kurs):
 
 
 # ---------------------------------------------------------------------------
+# The quick entry: remark, taking back, today's state
+# ---------------------------------------------------------------------------
+
+
+def test_ohne_notiz_bleibt_eine_vorhandene_notiz_stehen(session, graph, kurs):
+    """The quick entry has no remark field and passes none."""
+    dienst.mitarbeitsnote(
+        session, kurs, graph.schueler_a, Decimal("1.0"), notiz="Gute Frage.", datum=SCHULTAG
+    )
+
+    note = dienst.mitarbeitsnote(
+        session, kurs, graph.schueler_a, Decimal("1.3"), datum=SCHULTAG
+    )
+
+    assert note.notenwert == Decimal("1.3")
+    assert note.notiz == "Gute Frage."
+
+
+def test_eine_leere_notiz_entfernt_die_vorhandene(session, graph, kurs):
+    """The seat menu sends its field, empty or not; emptying it is a decision."""
+    dienst.mitarbeitsnote(
+        session, kurs, graph.schueler_a, Decimal("1.0"), notiz="Gute Frage.", datum=SCHULTAG
+    )
+
+    note = dienst.mitarbeitsnote(
+        session, kurs, graph.schueler_a, Decimal("1.0"), notiz="", datum=SCHULTAG
+    )
+
+    assert note.notiz is None
+
+
+def test_loeschen_nimmt_die_note_des_tages_zurueck(session, graph, kurs):
+    note = dienst.mitarbeitsnote(
+        session, kurs, graph.schueler_a, Decimal("5.0"), datum=SCHULTAG
+    )
+    leistung_id = note.leistung_id
+
+    geloescht = dienst.loesche_mitarbeitsnote(
+        session, kurs, graph.schueler_a, datum=SCHULTAG
+    )
+
+    assert geloescht is True
+    assert session.query(Note).filter_by(leistung_id=leistung_id).count() == 0
+    assert (
+        session.query(NoteHistorie)
+        .filter_by(schueler_id=graph.schueler_a.id, aktion="geloescht")
+        .count()
+        == 1
+    )
+
+
+def test_loeschen_trifft_nur_den_einen_tag(session, graph, kurs):
+    dienst.mitarbeitsnote(
+        session, kurs, graph.schueler_a, Decimal("2.0"), datum=SCHULTAG
+    )
+    dienst.mitarbeitsnote(
+        session, kurs, graph.schueler_a, Decimal("3.0"), datum=ZWEITER_TAG
+    )
+
+    dienst.loesche_mitarbeitsnote(session, kurs, graph.schueler_a, datum=ZWEITER_TAG)
+
+    werte = [
+        n.notenwert
+        for n in session.query(Note).join(Leistung).filter(
+            Note.schueler_id == graph.schueler_a.id,
+            Leistung.bezeichnung.like("Mitarbeit %"),
+        )
+    ]
+    assert werte == [Decimal("2.0")]
+
+
+def test_loeschen_ohne_note_meldet_nichts_geloescht(session, graph, kurs):
+    assert (
+        dienst.loesche_mitarbeitsnote(session, kurs, graph.schueler_a, datum=SCHULTAG)
+        is False
+    )
+    assert session.query(NoteHistorie).filter_by(aktion="geloescht").count() == 0
+
+
+def test_der_tagesstand_kennt_noten_und_teilnehmer(session, graph, kurs):
+    verwaltung.setze_teilnahme(session, kurs, graph.schueler_b, ist_aktiv=False)
+    dienst.mitarbeitsnote(
+        session, kurs, graph.schueler_a, Decimal("1.7"), datum=SCHULTAG
+    )
+
+    stand = dienst.tagesstand(session, kurs, SCHULTAG)
+
+    assert stand.hindernis is None
+    assert stand.teilnehmer == {graph.schueler_a.id}
+    assert {sid: n.notenwert for sid, n in stand.noten.items()} == {
+        graph.schueler_a.id: Decimal("1.7")
+    }
+
+
+def test_der_tagesstand_eines_anderen_tages_ist_leer(session, graph, kurs):
+    dienst.mitarbeitsnote(
+        session, kurs, graph.schueler_a, Decimal("1.7"), datum=SCHULTAG
+    )
+
+    assert dienst.tagesstand(session, kurs, ZWEITER_TAG).noten == {}
+
+
+def test_der_tagesstand_nennt_ferien_und_fehlende_gruppe(session, graph, kurs):
+    ferien = dienst.tagesstand(session, kurs, date(2026, 7, 15))
+    ohne_gruppe = dienst.tagesstand(session, graph.kurs, SCHULTAG)
+
+    assert "keinem Halbjahr" in ferien.hindernis
+    assert "Notengruppe" in ohne_gruppe.hindernis
+    assert ferien.noten == {} and ohne_gruppe.noten == {}
+
+
+# ---------------------------------------------------------------------------
 # The arithmetic the weight 3 exists for (3.1, 4.4)
 # ---------------------------------------------------------------------------
 

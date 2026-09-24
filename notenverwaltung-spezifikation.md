@@ -1,9 +1,11 @@
 # Notenverwaltung – Projektspezifikation
 
-**Version:** 1.3 · **Stand:** 19.08.2026
+**Version:** 1.4 · **Stand:** 24.09.2026
 **Zweck:** Beschreibt, *was* gebaut wurde, nicht *wie*. Version 1.2 ergänzte den
 Sitzplan (5.6), Version 1.3 das Merkmal *arbeitet digital* und die beiden
-Zahlen, die daraus folgen. Die Änderungslisten stehen gesammelt am Ende.
+Zahlen, die daraus folgen, Version 1.4 die Zugangspforte vor der Anwendung (2)
+und die Schnelleingabe der Mitarbeitsnote im Sitzplan (5.6).
+Die Änderungslisten stehen gesammelt am Ende.
 **Auftraggeber/Betreiber/Alleinnutzer:** eine Lehrkraft an einer berufsbildenden Schule (Rheinland-Pfalz).
 
 ---
@@ -34,21 +36,23 @@ Der letzte Punkt ist wichtig: **Es wird bewusst keine Offline-Fähigkeit gebaut.
 | Sprache | Python 3.11 |
 | Datenbank | SQLite |
 | ORM / Migrationen | SQLAlchemy + Alembic |
-| Deployment | Docker, ein Container für die App, ein Tailscale-Sidecar |
+| Deployment | Docker, ein Container für die App, ein Tailscale-Sidecar, eine Caddy-Pforte |
 | Host | TrueNAS SCALE, Compose-Stack über Dockge |
 | Netzzugang | ausschließlich über Tailscale, keine Portfreigabe |
-| Authentifizierung | keine in der Anwendung; Zugangsschutz über Tailscale-ACLs |
+| Authentifizierung | keine in der Anwendung; Zugangsschutz auf Infrastrukturebene: Tailscale (nur Tailnet) + Caddy-Pforte mit HTTP Basic Auth |
 | TLS | keines — siehe unten |
 
 ### Daraus folgende harte Anforderungen
 
-1. **Die Anwendung implementiert keine eigene Benutzerverwaltung, kein Login, kein Session-Handling, kein Passwort-Reset.** Sie liest auch keinen Identitäts-Header. Der Zugang wird vollständig davor geregelt: Der Container hat keinen veröffentlichten Port, hängt im Netz-Namespace eines Tailscale-Sidecars und ist nur über den Tailnet-Namen erreichbar. Wer den Knoten erreicht, darf alles. Diese Auslassung ist beabsichtigt und darf nicht „der Vollständigkeit halber" nachgerüstet werden.
+1. **Die Anwendung implementiert keine eigene Benutzerverwaltung, kein Login, kein Session-Handling, kein Passwort-Reset.** Sie liest auch keinen Identitäts-Header. Der Zugang wird vollständig davor geregelt, **auf Infrastrukturebene: Tailscale (nur Tailnet) + Caddy-Pforte mit HTTP Basic Auth im selben Compose-Stack. Die Anwendung selbst hat weiterhin keine Authentifizierung und keine Netzwerkverbindung nach außen.** Kein Container hat einen veröffentlichten Port. Die Pforte hängt im Netz-Namespace eines Tailscale-Sidecars und ist nur über den Tailnet-Namen erreichbar; die Anwendung hängt ausschließlich in einem internen Docker-Netz ohne Ausgang und ist nur über die Pforte erreichbar. Wer durch die Pforte kommt, darf alles. Die Auslassung in der Anwendung ist beabsichtigt und darf nicht „der Vollständigkeit halber" nachgerüstet werden.
+
+   Bekannte Grenzen der Pforte, in Kauf genommen: kein zweiter Faktor, keine Sperre nach Fehlversuchen, kein Abmelden — die Anmeldung gilt, bis der Browser geschlossen wird.
 2. **Die SQLite-Datei liegt auf einem lokalen ZFS-Dataset**, niemals auf einer SMB- oder NFS-Freigabe. App-Container und Datenbankdatei müssen auf demselben Host laufen.
 3. `PRAGMA foreign_keys = ON` bei **jeder** Verbindung. SQLite hat Fremdschlüssel standardmäßig deaktiviert; ohne dieses Pragma entstehen verwaiste Noten beim Löschen von Klassen oder Kursen.
 4. WAL-Modus aktivieren, `busy_timeout` setzen.
 5. **Backup-Skript** als Teil der Lieferung: `VACUUM INTO` in ein Snapshot-Dataset, per Cron. Kein `cp` auf die laufende Datenbank. Ein dokumentierter, einmal durchgespielter **Restore-Test** gehört zur Abnahme.
 6. **Kein TLS.** Version 1.0 verlangte HTTPS mit gültigem Zertifikat, weil der Kamerazugriff einen Secure Context braucht. Der Betreiber hat entschieden, darauf zu verzichten: Der Verkehr läuft ohnehin verschlüsselt durch das Tailnet, und ein Zertifikat für einen internen Namen ist zusätzlicher Betriebsaufwand. Folge für Abschnitt 7 dort beschrieben.
-7. **Die Anwendung baut keine ausgehenden Verbindungen auf.** Keine CDNs, keine Telemetrie; alle Assets liegen lokal.
+7. **Die Anwendung baut keine ausgehenden Verbindungen auf.** Keine CDNs, keine Telemetrie; alle Assets liegen lokal. Das interne Netz ohne Ausgang (Punkt 1) setzt das zusätzlich technisch durch.
 
 ---
 
@@ -173,7 +177,7 @@ unbesetzt, damit die übrigen Nummern gültig bleiben.
 
 ### 4.3 Eingabe
 
-Noten werden ausschließlich **direkt als Notenstufe mit Tendenz** eingetragen (Auswahl aus 1+ … 6). Eine Punkteeingabe mit Umrechnung über einen Notenschlüssel (4.2) gibt es nicht; die Umrechnung von Punkten in Noten findet außerhalb dieser Anwendung statt.
+Noten werden ausschließlich **direkt als Notenstufe mit Tendenz** eingetragen (Auswahl aus 1+ … 6). Einzige Einschränkung des Angebots: Die Mitarbeitsnote im Sitzplan bietet nur die ganzen Noten 1 bis 6 an (5.6). Eine Punkteeingabe mit Umrechnung über einen Notenschlüssel (4.2) gibt es nicht; die Umrechnung von Punkten in Noten findet außerhalb dieser Anwendung statt.
 
 **Status einer Note:**
 
@@ -183,7 +187,7 @@ Noten werden ausschließlich **direkt als Notenstufe mit Tendenz** eingetragen (
 
 Die Unterscheidung zwischen „nicht gewertet" und „fehlt" ist zwingend. Ein fehlender Wert darf **niemals** implizit als 0 oder als 6 behandelt werden.
 
-**Zwei Wege zur Note.** Der Regelweg ist die Serieneingabe (5.4): eine Leistung, alle Teilnehmer nacheinander. Daneben steht die **Mitarbeitsnote aus dem Sitzplan** (5.6) — eine einzelne Note für einen einzelnen Schüler an einem Tag. Beide schreiben denselben Datensatz und dieselbe Änderungshistorie (3.2); es gibt keinen zweiten Rechenweg.
+**Zwei Wege zur Note.** Der Regelweg ist die Serieneingabe (5.4): eine Leistung, alle Teilnehmer nacheinander. Daneben steht die **Mitarbeitsnote aus dem Sitzplan** (5.6) — eine einzelne Note für einen einzelnen Schüler an einem Tag, über das Menü des Platzes oder in der Schnelleingabe. Alle schreiben denselben Datensatz und dieselbe Änderungshistorie (3.2); es gibt keinen zweiten Rechenweg.
 
 ### 4.4 Berechnung der Halbjahresnote
 
@@ -351,11 +355,26 @@ Der einzige Weg, auf dem der Sitzplan eine Note berührt. Gedacht für den Momen
 
 **Der Kurs wird beim Öffnen gewählt.** Der Sitzplan gehört zur Klasse, eine Note zu einem Kurs. Beim Öffnen des Plans wird deshalb einmal der Kurs gewählt, in dem gerade unterrichtet wird; er bleibt oben sichtbar und gilt für die ganze Sitzung. Ohne gewählten Kurs bietet der Plan keine Mitarbeitsnote an.
 
-**Eintragen.** Im Menü eines besetzten Platzes steht neben „Platz räumen" und „Tauschen" der Eintrag **„Mitarbeitsnote"**. Er öffnet die Auswahl 1+ … 6 und ein **Notizfeld** — die Begründung, die man drei Monate später nicht mehr im Kopf hat. Gespeichert wird nach der Antwort des Servers, sichtbar bestätigt wie überall (10).
+**Eintragen.** Im Menü eines besetzten Platzes steht neben „Platz räumen" und „Tauschen" der Eintrag **„Mitarbeitsnote"**. Er öffnet die Auswahl der ganzen Noten 1 bis 6 und ein **Notizfeld** — die Begründung, die man drei Monate später nicht mehr im Kopf hat. Gespeichert wird nach der Antwort des Servers, sichtbar bestätigt wie überall (10).
 
 **Wohin die Note gehört.** In die Notengruppe **„Mitarbeit"** des gewählten Kurses, im Halbjahr, in das das heutige Datum fällt. Innerhalb dieser Gruppe entsteht je Tag **eine Leistung** „Mitarbeit TT.MM.JJJJ" mit Gewicht 1,0 — angelegt beim ersten Eintrag des Tages, nicht vorab. Wer an diesem Tag keine Note bekommt, hat dort **keinen Datensatz**; das ist kein fehlender Wert, sondern keine Leistung, und es verändert die Berechnung nicht (4.4).
 
 **Voraussetzung.** Der Kurs muss im betreffenden Halbjahr eine Notengruppe „Mitarbeit" haben. Bei neu angelegten Kursen ist sie als Vorgabe vorhanden (3.1); bei älteren Kursen wird sie von Hand angelegt. Fehlt sie, verweigert die Anwendung den Eintrag mit einer Meldung, die genau das sagt — sie legt keine Gruppe im Vorbeigehen an, weil deren Gewicht eine Zeugnisnote verschiebt.
+
+**Schnelleingabe.** Neben „Plätze bearbeiten" steht der Schalter **„Mitarbeitsnoten"**. Er schaltet in einen eigenen Modus, in dem unter jedem Schüler des Plans — auch unter denen ohne Platz — ein kleines Auswahlfeld steht: „–" und die ganzen Noten 1 bis 6. Eine Auswahl wird sofort gespeichert und am Feld selbst bestätigt, erst nach der Antwort des Servers (10). Die Notiz wird hier nicht erfasst; sie bleibt dem Menü des Platzes vorbehalten, und eine dort gegebene Notiz bleibt beim Ändern der Note in der Schnelleingabe erhalten.
+
+- Das Feld zeigt die **heutige** Mitarbeitsnote im gewählten Kurs. Sonst wäre nicht zu sehen, wer heute schon eine hat, und eine zweite Auswahl überschriebe sie unbemerkt. Das ist die einzige Stelle, an der der Plan eine Note zeigt (siehe „Ausdrücklich nicht Bestandteil").
+- **„–" nimmt die heutige Note zurück** — sie wird gelöscht, wie in der Serieneingabe.
+- Vorgabe jedes Feldes ist „–". Wer nichts ausgewählt bekommt, hat keinen Datensatz; die Regel „niemand oder nur einzelne" (oben) gilt unverändert.
+- Die Note gehört dem Schüler, dessen Name über dem Feld steht, nicht dem Platz: Wurde zwischendurch umgesetzt, landet sie trotzdem bei ihm.
+- Wer den gewählten Kurs nicht besucht, bekommt kein Feld, sondern den Hinweis „nicht im Kurs".
+- Ist kein Kurs gewählt, fehlt die Gruppe „Mitarbeit" oder liegt der Tag in den Ferien, steht der Grund **einmal** über dem Raster, und es gibt keine Felder.
+- Die Plätze sind in diesem Modus keine Verweise; eine Fehlberührung zwischen zwei Noten öffnet kein Schülerblatt.
+- Felder und Noten erscheinen **nicht im Ausdruck**.
+
+**Nur ganze Noten.** Beide Wege im Sitzplan — Menü und Schnelleingabe — bieten 1 bis 6 **ohne Tendenz** an. Entscheidung des Betreibers: Für die Mitarbeitsnote im Unterricht braucht es keine Tendenzen. Das ist eine Einschränkung des Angebots, nicht der Daten: Eine heute bereits gespeicherte Note mit Tendenz — etwa aus der Serieneingabe der Leistung „Mitarbeit TT.MM.JJJJ", die weiterhin alle Werte anbietet — steht zusätzlich in der Auswahl und ist ausgewählt, statt als „–" zu erscheinen. Die Berechnung (4.4) ist davon nicht berührt.
+
+Das Menü des Platzes ist mit der heutigen Note und Notiz vorbelegt, sofern es sie gibt. Wer dort nur eine Notiz nachträgt, ändert damit nicht versehentlich die Note.
 
 **Status und Rücknahme.** Eine Mitarbeitsnote ist immer `gewertet`. Die Status `nicht_gewertet` und `nicht_erbracht` haben hier keinen Sinn: Es gibt keine Leistung, die jemand hätte erbringen müssen. Eine falsch vergebene Note wird **gelöscht**, nicht umgewidmet; die Änderungshistorie (3.2) hält das fest wie bei jeder anderen Note.
 
@@ -365,7 +384,7 @@ Der einzige Weg, auf dem der Sitzplan eine Note berührt. Gedacht für den Momen
 
 - **Keine Anwesenheiten, keine Fehlzeiten.** Das ist und bleibt ein Nicht-Ziel (1). Ein Sitzplan lädt dazu ein; er ist dafür nicht der Einstieg.
 - **Keine Auswertung des Merkmals „arbeitet digital" über die Anzeige hinaus.** Es färbt eine Kachel und zählt eine Zahl, sonst nichts (3.1).
-- **Keine Notenanzeige im Plan.** Der Plan zeigt Foto und Name, keine Noten und keinen Notenstand. Eingetragen wird ausschließlich die Mitarbeitsnote des Tages (siehe oben), und auch die erscheint danach nicht auf dem Platz.
+- **Keine Notenanzeige im Plan.** Der Plan zeigt Foto und Name, keine Noten und keinen Notenstand. Eingetragen wird ausschließlich die Mitarbeitsnote des Tages (siehe oben). Einzige Ausnahme ist die Schnelleingabe: Dort zeigt das Auswahlfeld die heutige Mitarbeitsnote im gewählten Kurs — nicht in der Ansicht, nicht im Ausdruck, keine andere Note.
 - Kein zweiter Plan je Klasse, keine Klausurordnung, kein Duplizieren.
 - Keine frei platzierbaren Tische, kein Zoom, kein Ziehen.
 - Kein Übertrag zwischen Schuljahren.
@@ -451,6 +470,18 @@ Daraus folgt konkret:
 - Es dürfen keine Daten die Anwendung verlassen außer durch den ausdrücklich ausgelösten Export.
 
 Die Klärung der Genehmigung liegt beim Auftraggeber und ist keine Aufgabe des Entwicklungsprojekts.
+
+---
+
+## Änderungen gegenüber Version 1.3
+
+| Abschnitt | Änderung | Grund |
+|---|---|---|
+| 5.6 | **Schnelleingabe der Mitarbeitsnote**: Schalter „Mitarbeitsnoten", ein Auswahlfeld unter jedem Schüler, speichert sofort, „–" nimmt zurück | Wunsch des Betreibers: Der Weg über „Plätze bearbeiten" → Platz → „Mitarbeitsnote" → Eingabe war im Unterricht zu umständlich |
+| 5.6 | In der Schnelleingabe zeigt das Feld die **heutige** Mitarbeitsnote im gewählten Kurs; Ausnahme von „Keine Notenanzeige im Plan" | Entscheidung des Betreibers: sonst sieht man nicht, wer heute schon eine Note hat, und überschreibt sie unbemerkt. Ansicht und Ausdruck bleiben ohne Noten |
+| 5.6, 4.3 | Die Mitarbeitsnote im Sitzplan (Menü und Schnelleingabe) bietet nur **ganze Noten 1 bis 6** an, keine Tendenz. Eine gespeicherte Tendenz wird weiter angezeigt; die Serieneingabe bleibt bei allen Werten | Entscheidung des Betreibers: Für die Mitarbeitsnote im Unterricht braucht es keine Tendenzen. Datenmodell und Berechnung bleiben unverändert |
+| 5.6 | Das Menü des Platzes ist mit heutiger Note und Notiz vorbelegt statt mit „3" | Mit der Vorgabe „3" überschrieb das Nachtragen einer Notiz eine vorhandene Note |
+| 2 | **Caddy-Pforte** mit HTTP Basic Auth vor der Anwendung, im selben Compose-Stack. Die Anwendung hängt nicht mehr im Netz des Tailscale-Sidecars, sondern nur in einem internen Netz ohne Ausgang | Entscheidung des Betreibers: eine zweite Schutzebene hinter Tailscale. Sie liegt ausschließlich auf Infrastrukturebene; die Anwendung bleibt ohne Login und liest weiterhin keinen Identitäts-Header |
 
 ---
 

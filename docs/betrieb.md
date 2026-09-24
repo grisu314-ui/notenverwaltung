@@ -5,6 +5,10 @@ stoppt nur den Stack; eine Kommandozeile hat es nicht.
 
 Neuaufbau von Grund auf: `inbetriebnahme-truenas.md`.
 
+Vor der Anwendung steht eine Caddy-Pforte mit Passwortabfrage. Passwort
+ändern: README, „Zugang & Passwort ändern". Abnahme und Störungssuche der
+Pforte: `inbetriebnahme-truenas.md`.
+
 ## Sicherung
 
 Läuft nächtlich per Cron:
@@ -72,28 +76,38 @@ und wird nicht auf einen Zweig umgestellt: Er liegt eine Ebene über `daten/`
 und `sicherungen/`, und die nächste Version soll von dort aus gebaut werden
 können, ohne dass jemand erst den Zweig zurückstellen muss.
 
+Geholt wird über den Deploy Key (`inbetriebnahme-truenas.md`, Schritt 2) —
+beim Klonen einmal auf der Kommandozeile, danach steht er in der
+`.git/config` des Testbaums:
+
 ```bash
-sudo git clone https://github.com/grisu314-ui/notenverwaltung.git /mnt/Daten-Z1/apps/notenverwaltung-dev
+ZUGANG="ssh -i /mnt/Daten-Z1/apps/git-zugang/deploy_key -o IdentitiesOnly=yes -o UserKnownHostsFile=/mnt/Daten-Z1/apps/git-zugang/known_hosts"
+sudo git -c core.sshCommand="$ZUGANG" clone git@github.com:grisu314-ui/notenverwaltung.git /mnt/Daten-Z1/apps/notenverwaltung-dev
 cd /mnt/Daten-Z1/apps/notenverwaltung-dev
+sudo git config core.sshCommand "$ZUGANG"
 sudo git checkout ZU-TESTENDER-ZWEIG
 
-sudo mkdir -p daten sicherungen tailscale
+sudo mkdir -p daten sicherungen tailscale pforte
 sudo chown -R 1000:1000 daten sicherungen
-# tailscale/ gehört root -- tailscaled läuft im Container als root
+# tailscale/ und pforte/ gehören root -- beide Container laufen als root
+sudo chmod 700 tailscale pforte
 
-docker build -t notenverwaltung:TEST-TAG .
+docker build -t notenverwaltung-dev:$(date +%Y-%m-%d) .
 ```
 
 **Ohne das Zielverzeichnis am Ende legt `git clone` ein eigenes Unterverzeichnis
 nach dem Repository-Namen an** (`notenverwaltung/` statt der aktuellen
 Arbeitsverzeichnisses) — passiert leicht, wenn eine mehrzeilige Eingabe beim
-Einfügen abreißt. Kein Schaden, nur ein `cd notenverwaltung` zusätzlich; die
-Pfade zu `daten/`, `sicherungen/` und `tailscale/` ändern sich dadurch nicht,
-sie hängen nicht vom Quellbaum ab.
+Einfügen abreißt. Dann liegt auch `caddy/` eine Ebene zu tief, und die
+Test-Pforte findet ihr Caddyfile nicht: Docker legt für den fehlenden Pfad
+ein leeres Verzeichnis an, und die Pforte startet ohne Konfiguration. Also
+entweder richtig klonen oder den `caddy/`-Pfad in der Test-`compose.yaml`
+anpassen. `daten/`, `sicherungen/`, `tailscale/` und `pforte/` hängen nicht
+vom Quellbaum ab.
 
 Damit sieht der Testbaum genauso aus wie der produktive: Quellbaum in der
-Wurzel, `daten/`, `sicherungen/` und `tailscale/` darunter. Das dritte
-Verzeichnis wird leicht vergessen — es steht als Volume in der `compose.yaml`
+Wurzel (mit `caddy/`), `daten/`, `sicherungen/`, `tailscale/` und `pforte/`
+darunter. `tailscale/` wird leicht vergessen — es steht als Volume in der `compose.yaml`
 und nimmt den Knotenzustand des Sidecars auf.
 
 Die Datenverzeichnisse stehen in `.dockerignore`; das Image enthält nie eine
@@ -101,18 +115,54 @@ Datenbank, gleich aus welchem Baum gebaut wird.
 
 ### Was gegenüber dem produktiven Stack anders sein muss
 
-Keine zweite Compose-Datei im Quellbaum, sondern eine Kopie der produktiven
-mit sechs geänderten Werten — eine mitgepflegte zweite Datei läuft
-erfahrungsgemäß auseinander:
+Die Compose-Datei des Test-Stacks steht im Quellbaum:
+**`docker-compose.truenas-dev.yml`**. In Dockge einen eigenen Stack anlegen
+(z. B. `notenverwaltung-dev`) und ihren Inhalt einfügen:
+
+```bash
+cat /mnt/Daten-Z1/apps/notenverwaltung-dev/docker-compose.truenas-dev.yml
+```
+
+Einen Platzhalter eintragen wie beim produktiven Stack: den Tag des
+Test-Images. Die Tailscale- und die Caddy-Version stehen fest und sind
+dieselben wie produktiv.
+
+Sie ist die produktive Datei mit genau diesen geänderten Werten, dazu eine
+eigene `.env`:
+
 
 | Stelle | produktiv | Test |
 |---|---|---|
-| alle drei Pfade | `…/notenverwaltung/…` | `…/notenverwaltung-dev/…` |
+| alle Pfade (sechs) | `…/notenverwaltung/…` | `…/notenverwaltung-dev/…` |
 | `container_name` (Sidecar) | `notenverwaltung-tailscale` | `notenverwaltung-dev-tailscale` |
 | `hostname`, `TS_HOSTNAME` | `notenverwaltung` | `notenverwaltung-dev` |
 | `TS_AUTHKEY` in `.env` | der produktive Schlüssel | **eigener** Schlüssel |
+| `container_name` (Pforte) | `notenverwaltung-pforte` | `notenverwaltung-dev-pforte` |
+| `PFORTE_USER`, `PFORTE_HASH` in `.env` | der produktive Zugang | **eigener** Benutzer und Hash |
 | `container_name` (App) | `notenverwaltung` | `notenverwaltung-dev` |
-| `image:` | der produktive Tag | z. B. `notenverwaltung:sitzplan-test` |
+| `image:` | `notenverwaltung:JJJJ-MM-TT` | `notenverwaltung-dev:JJJJ-MM-TT` |
+
+Eine zweite Compose-Datei läuft erfahrungsgemäß auseinander. Deshalb prüft
+`tests/test_zugang.py`, dass die Testdatei sich von der produktiven **nur** in
+diesen Werten unterscheidet, dass sie keinen produktiven Pfad enthält und dass
+`TS_HOSTNAME` auf `notenverwaltung-dev` steht. Eine Änderung an der
+produktiven Datei gehört also immer auch in die Testdatei.
+
+> **`TS_HOSTNAME` ist der Name im Tailnet, `hostname` nur der des
+> Containers.** Steht bei `TS_HOSTNAME` noch `notenverwaltung`, kollidiert
+> der Testknoten mit dem produktiven. Tailscale nennt ihn dann
+> `notenverwaltung-1`, und unter `notenverwaltung-dev` antwortet nichts. Wer
+> dagegen `http://notenverwaltung:8000` aufruft, landet auf dem
+> **produktiven** Stack. Nach der Berichtigung zeigt
+> `docker exec notenverwaltung-dev-tailscale tailscale status | head -1` den
+> Namen. Bleibt er bei `notenverwaltung-1`, in der Tailscale-Konsole unter
+> *Machines → … → Edit machine name* umbenennen.
+
+Unverändert bleiben der Netz-Alias `anwendung` und das Caddyfile: Beide
+Stacks sind eigene Compose-Projekte mit eigenem internen Netz, der Alias
+kollidiert nicht. Ein eigener Port ist nicht nötig — der Test-Stack hat
+seinen eigenen Tailnet-Namen und ist unter `http://notenverwaltung-dev:8000`
+erreichbar.
 
 Damit entsteht ein zweiter Tailnet-Knoten; beide sind nebeneinander
 erreichbar. **Keine zweite Cron-Sicherung einrichten** — der bestehende
@@ -132,11 +182,11 @@ Platzhalterbildern. Das Skript bricht ab, wenn die Datenbank nicht leer ist.
 docker run --rm \
     -v /mnt/Daten-Z1/apps/notenverwaltung-dev/daten:/daten \
     --entrypoint alembic \
-    notenverwaltung:TEST-TAG upgrade head
+    notenverwaltung-dev:JJJJ-MM-TT upgrade head
 docker run --rm \
     -v /mnt/Daten-Z1/apps/notenverwaltung-dev/daten:/daten \
     --entrypoint python \
-    notenverwaltung:TEST-TAG scripts/seed_dev.py
+    notenverwaltung-dev:JJJJ-MM-TT scripts/seed_dev.py
 ```
 
 *Läuft die Migration auf meinem echten Bestand?* — mit einer Kopie, gezogen
@@ -154,6 +204,23 @@ sudo chown 1000:1000 /mnt/Daten-Z1/apps/notenverwaltung-dev/daten/notenverwaltun
 
 Erst wenn das sauber läuft, den nächsten Abschnitt gegen den produktiven
 Stack fahren.
+
+## Tailscale- und Caddy-Image aktualisieren
+
+Beide sind festgenagelt: `tailscale/tailscale:v1.102.2` und
+`caddy:2.11.4-alpine`. Ein Pull tauscht sie deshalb nie unbemerkt aus. Eine
+neue Version kommt so hinein:
+
+1. Die neue Nummer in **allen drei** Compose-Dateien eintragen
+   (`docker-compose.truenas.yml`, `docker-compose.truenas-dev.yml`,
+   `docker-compose.yml`). `tests/test_zugang.py` schlägt fehl, solange sie
+   nicht überall gleich ist.
+2. Im **Test-Stack** deployen und die Abnahme der Pforte durchspielen
+   (`inbetriebnahme-truenas.md`).
+3. Erst dann im produktiven Stack.
+
+Zurück geht es genauso: alte Nummer eintragen, deployen. Die Datenverzeichnisse
+berührt keines der beiden Images.
 
 ## Neue Version einspielen
 
@@ -311,6 +378,28 @@ Sitzplan derselbe Durchlauf, verkürzt:
 Ohne JavaScript bleibt jeder Platz ein gewöhnlicher Link und jede Zuweisung
 ein Formular mit Absendeknopf.
 
+### Die Schnelleingabe der Mitarbeitsnote
+
+Sie schreibt Noten und bekommt deshalb den vollen Durchlauf — nach jeder
+Änderung am Sitzplan zu wiederholen, auf dem Telefon:
+
+1. Sitzplan öffnen, Kurs wählen, „Mitarbeitsnoten". Bei einem Schüler eine
+   Note auswählen. → Unter dem Feld steht „✓" mit Uhrzeit, das Feld ist grün
+   umrandet.
+2. **Flugmodus einschalten**, bei einem anderen Schüler eine Note auswählen.
+   → Das Feld zeigt „…" und **bekommt keinen Haken**. Dann wird es rot
+   („NICHT gespeichert"), über dem Raster steht der Grund — sofort oder nach
+   15 Sekunden, wie in der Serieneingabe.
+3. Seite zu verlassen versuchen. → Der Browser fragt nach.
+4. Flugmodus aus, Seite neu laden. → Das erste Feld zeigt seine Note, das
+   zweite „–" — und das war vorher sichtbar.
+5. Beim ersten Schüler „–" wählen. → „✓ gelöscht", nach dem Neuladen „–".
+
+Was in keinem Fall passieren darf: ein Haken ohne Serverantwort. Der Haken und
+der Wert im Feld werden vom Server aus dem gespeicherten Datensatz gerendert,
+nicht vom Browser gesetzt. Einmal durchgespielt in Chromium mit abgeschaltetem
+Netz; auf einem echten Telefon steht der Durchlauf noch aus.
+
 ## Störungssuche
 
 | Fehlerbild | Ursache | Abhilfe |
@@ -319,10 +408,29 @@ ein Formular mit Absendeknopf.
 | Container startet nicht, Protokoll nennt eine ausstehende Migration | neues Image, altes Schema | Migration ausführen, siehe oben |
 | Container startet nicht, Protokoll nennt eine fehlende Datenbank | Datei weg oder falscher Pfad | Sicherung zurückspielen |
 | Anwendung im Tailnet nicht erreichbar | Sidecar läuft nicht | `docker logs notenverwaltung-tailscale`, siehe Inbetriebnahme |
+| Nicht erreichbar, obwohl alle drei Container `Up` zeigen | Sidecar wurde allein neu gestartet | `docker restart notenverwaltung-pforte` |
+| `502 Bad Gateway` nach der Passworteingabe | Pforte läuft, Anwendung nicht | `docker logs notenverwaltung` |
+| Passwort wird nie angenommen | Hash in der `.env` ohne einfache Anführungszeichen | README, „Zugang & Passwort ändern" |
 
 Protokolle:
 
 ```bash
 docker logs notenverwaltung --tail 50
+docker logs notenverwaltung-pforte --tail 50
 docker logs notenverwaltung-tailscale --tail 50
 ```
+
+## Zurück ohne Pforte
+
+Macht die Pforte Probleme, die sich nicht schnell lösen lassen: die
+Compose-Datei in Dockge durch den Stand vor ihrer Einführung ersetzen und
+deployen. Die Datenverzeichnisse sind von der Änderung nicht betroffen.
+
+```bash
+cd /mnt/Daten-Z1/apps/notenverwaltung
+git log --oneline -- docker-compose.truenas.yml   # den Commit vor der Pforte suchen
+git show COMMIT:docker-compose.truenas.yml         # diesen Stand in Dockge einfügen
+```
+
+Danach ist die Anwendung wieder **ohne Passwort** im Tailnet erreichbar — nur
+als Übergang gedacht.

@@ -8,6 +8,12 @@ What they cannot prove: how the printed page looks, and what the browser
 shows when the connection drops mid-request. Both are checked by hand.
 """
 
+import re
+from datetime import date
+from decimal import Decimal
+
+import pytest
+
 from app.db.models import Sitzplan, Sitzplatz
 
 HTMX = {"HX-Request": "true"}
@@ -224,7 +230,27 @@ def test_das_umsetzen_laesst_jede_note_in_ruhe(client, session, graph):
 
 # ---------------------------------------------------------------------------
 # The participation grade of the day (5.6)
+#
+# "Today" is fixed for every test that stores a grade. The plan asks the
+# clock, and a test that reads the real date stops working once the school
+# year of the fixture is over (31.07.2027).
 # ---------------------------------------------------------------------------
+
+SCHULTAG = date(2026, 12, 1)
+FERIENTAG = date(2027, 8, 15)
+
+
+@pytest.fixture
+def heute(monkeypatch):
+    """Set today's date for the plan; returns a setter for other days."""
+
+    def setze(tag):
+        monkeypatch.setattr("app.web.routers.sitzplan.heute_lokal", lambda: tag)
+        monkeypatch.setattr("app.services.sitzplan.heute_lokal", lambda: tag)
+
+    setze(SCHULTAG)
+    return setze
+
 
 
 def _kurs_mit_vorgabegruppen(session, graph):
@@ -282,9 +308,11 @@ def test_mit_kurs_bietet_der_platz_die_mitarbeitsnote_an(client, session, graph)
     assert "modus=mitarbeit" in antwort.text
 
 
-def test_die_eingabemaske_zeigt_die_sechzehn_noten_und_ein_notizfeld(
+def test_die_eingabemaske_zeigt_ganze_noten_und_ein_notizfeld(
     client, session, graph
 ):
+    """On the plan a participation grade is a whole grade (5.6); the serial
+    entry keeps all sixteen values."""
     kurs = _kurs_mit_vorgabegruppen(session, graph)
     _setze(client, graph, 1, 1, graph.schueler_a, kurs)
 
@@ -294,14 +322,18 @@ def test_die_eingabemaske_zeigt_die_sechzehn_noten_und_ein_notizfeld(
         headers=HTMX,
     )
 
-    for beschriftung in ("1+", "2−", "6"):
+    for beschriftung in ("1", "2", "6"):
         assert f">{beschriftung}</option>" in antwort.text
+    for tendenz in ("1+", "2−", "5+"):
+        assert f">{tendenz}</option>" not in antwort.text
     assert 'name="notiz"' in antwort.text
     # A participation grade is always counted (5.6).
     assert "nicht erbracht" not in antwort.text
 
 
-def test_eine_mitarbeitsnote_wird_gespeichert_und_bestaetigt(client, session, graph):
+def test_eine_mitarbeitsnote_wird_gespeichert_und_bestaetigt(
+    client, session, graph, heute
+):
     from app.db.models import Note
 
     kurs = _kurs_mit_vorgabegruppen(session, graph)
@@ -434,3 +466,344 @@ def test_die_markierung_haengt_nicht_allein_an_der_farbe(client, session, graph)
 
     assert "●" in antwort.text
     assert 'title="arbeitet digital"' in antwort.text
+
+
+# ---------------------------------------------------------------------------
+# The quick entry: a participation grade select under every pupil (5.6)
+# ---------------------------------------------------------------------------
+
+
+def _schnell(client, graph, schueler, kurs, notenwert, htmx=True):
+    return client.post(
+        f"{url(graph)}/mitarbeit/{schueler.id}",
+        data={"kurs": kurs.id, "notenwert": notenwert},
+        headers=HTMX if htmx else {},
+        follow_redirects=False,
+    )
+
+
+def _noten_des_tages(session, schueler):
+    from app.db.models import Leistung, Note
+
+    session.expire_all()
+    return (
+        session.query(Note)
+        .join(Leistung)
+        .filter(Leistung.datum == SCHULTAG, Note.schueler_id == schueler.id)
+        .all()
+    )
+
+
+def test_die_ansicht_bietet_die_schnelleingabe_an(client, session, graph, heute):
+    kurs = _kurs_mit_vorgabegruppen(session, graph)
+
+    antwort = client.get(url(graph), params={"kurs": kurs.id})
+
+    assert "Mitarbeitsnoten" in antwort.text
+    assert f"modus=noten&amp;kurs={kurs.id}" in antwort.text
+
+
+def test_ohne_kurs_zeigt_die_schnelleingabe_keine_felder(client, session, graph, heute):
+    _kurs_mit_vorgabegruppen(session, graph)
+    _setze(client, graph, 1, 1, graph.schueler_a)
+
+    antwort = client.get(url(graph), params={"modus": "noten"})
+
+    assert "oben den Kurs wählen" in antwort.text
+    assert 'class="mitarbeitsfeld' not in antwort.text
+
+
+def test_unter_jedem_teilnehmer_steht_ein_feld(client, session, graph, heute):
+    """Seated or not: a pupil without a seat is no pupil without a grade."""
+    kurs = _kurs_mit_vorgabegruppen(session, graph)
+    _setze(client, graph, 1, 1, graph.schueler_a, kurs)
+
+    antwort = client.get(url(graph), params={"modus": "noten", "kurs": kurs.id})
+
+    assert f'id="mitarbeit-{graph.schueler_a.id}"' in antwort.text
+    assert f'id="mitarbeit-{graph.schueler_b.id}"' in antwort.text
+    feld = antwort.text.split(f'id="mitarbeit-{graph.schueler_a.id}"')[1].split("</select>")[0]
+    angeboten = re.findall(r">([^<]*)</option>", feld)
+    assert angeboten == ["–", "1", "2", "3", "4", "5", "6"]
+    # Always counted (5.6), and nothing given yet.
+    assert "nicht erbracht" not in antwort.text
+    assert "✓" not in antwort.text
+
+
+def test_in_der_schnelleingabe_fuehrt_kein_platz_weg(client, session, graph, heute):
+    """A stray touch between two grades must not open the pupil's page."""
+    kurs = _kurs_mit_vorgabegruppen(session, graph)
+    _setze(client, graph, 1, 1, graph.schueler_a, kurs)
+
+    antwort = client.get(url(graph), params={"modus": "noten", "kurs": kurs.id})
+
+    assert 'href="/schueler/' not in antwort.text
+    assert "modus=zuweisen" not in antwort.text
+    assert "Raster übernehmen" not in antwort.text
+    assert "Fertig" in antwort.text
+
+
+def test_wer_den_kurs_nicht_besucht_bekommt_kein_feld(client, session, graph, heute):
+    from app.db.models import Kursteilnahme
+
+    kurs = _kurs_mit_vorgabegruppen(session, graph)
+    session.get(Kursteilnahme, (kurs.id, graph.schueler_b.id)).ist_aktiv = False
+    session.commit()
+
+    antwort = client.get(url(graph), params={"modus": "noten", "kurs": kurs.id})
+
+    assert f'id="mitarbeit-{graph.schueler_a.id}"' in antwort.text
+    assert f'id="mitarbeit-{graph.schueler_b.id}"' not in antwort.text
+    assert "nicht im Kurs" in antwort.text
+
+
+def test_eine_auswahl_wird_gespeichert_und_aus_dem_datensatz_bestaetigt(
+    client, session, graph, heute
+):
+    kurs = _kurs_mit_vorgabegruppen(session, graph)
+
+    antwort = _schnell(client, graph, graph.schueler_a, kurs, "2.0")
+
+    assert antwort.status_code == 200
+    assert f'id="mitarbeit-{graph.schueler_a.id}"' in antwort.text
+    assert 'value="2.0" selected' in antwort.text
+    assert "✓" in antwort.text
+    [note] = _noten_des_tages(session, graph.schueler_a)
+    assert note.notenwert == Decimal("2.0")
+    assert note.leistung.bezeichnung == "Mitarbeit 01.12.2026"
+    assert note.leistung.notengruppe.kurs_id == kurs.id
+
+
+def test_die_heutige_note_steht_nach_dem_neuladen_im_feld(
+    client, session, graph, heute
+):
+    kurs = _kurs_mit_vorgabegruppen(session, graph)
+    _schnell(client, graph, graph.schueler_a, kurs, "2.0")
+
+    antwort = client.get(url(graph), params={"modus": "noten", "kurs": kurs.id})
+
+    assert 'value="2.0" selected' in antwort.text
+
+
+def test_ausserhalb_der_schnelleingabe_zeigt_der_plan_keine_noten(
+    client, session, graph, heute
+):
+    """5.6: the grade shows in the quick entry only, never in view or print."""
+    kurs = _kurs_mit_vorgabegruppen(session, graph)
+    _setze(client, graph, 1, 1, graph.schueler_a, kurs)
+    _schnell(client, graph, graph.schueler_a, kurs, "2.0")
+
+    for modus in ("ansicht", "bearbeiten"):
+        antwort = client.get(url(graph), params={"modus": modus, "kurs": kurs.id})
+        assert 'class="mitarbeitsfeld' not in antwort.text, modus
+        assert 'value="2.0" selected' not in antwort.text, modus
+
+
+def test_eine_zweite_auswahl_aendert_die_note_und_die_historie(
+    client, session, graph, heute
+):
+    from app.db.models import NoteHistorie
+
+    kurs = _kurs_mit_vorgabegruppen(session, graph)
+    _schnell(client, graph, graph.schueler_a, kurs, "2.0")
+    _schnell(client, graph, graph.schueler_a, kurs, "3.0")
+
+    [note] = _noten_des_tages(session, graph.schueler_a)
+    assert note.notenwert == Decimal("3.0")
+    aktionen = [
+        e.aktion
+        for e in session.query(NoteHistorie)
+        .filter_by(note_id=note.id)
+        .order_by(NoteHistorie.id)
+    ]
+    assert aktionen == ["angelegt", "geaendert"]
+
+
+def test_der_strich_nimmt_die_heutige_note_zurueck(client, session, graph, heute):
+    from app.db.models import NoteHistorie
+
+    kurs = _kurs_mit_vorgabegruppen(session, graph)
+    _schnell(client, graph, graph.schueler_a, kurs, "5.0")
+
+    antwort = _schnell(client, graph, graph.schueler_a, kurs, "")
+
+    assert antwort.status_code == 200
+    assert "gelöscht" in antwort.text
+    assert 'value="" selected' in antwort.text
+    assert _noten_des_tages(session, graph.schueler_a) == []
+    assert (
+        session.query(NoteHistorie)
+        .filter_by(schueler_id=graph.schueler_a.id, aktion="geloescht")
+        .count()
+        == 1
+    )
+
+
+def test_der_strich_ohne_note_aendert_nichts(client, session, graph, heute):
+    kurs = _kurs_mit_vorgabegruppen(session, graph)
+
+    antwort = _schnell(client, graph, graph.schueler_a, kurs, "")
+
+    assert antwort.status_code == 200
+    assert _noten_des_tages(session, graph.schueler_a) == []
+
+
+def test_die_schnelleingabe_laesst_die_notiz_stehen(client, session, graph, heute):
+    """The quick entry has no remark field; it must not wipe one given earlier."""
+    kurs = _kurs_mit_vorgabegruppen(session, graph)
+    _setze(client, graph, 1, 1, graph.schueler_a, kurs)
+    client.post(
+        f"{url(graph)}/platz/1/1/mitarbeit",
+        data={"kurs": kurs.id, "notenwert": "1.0", "notiz": "Trug die Diskussion."},
+        headers=HTMX,
+    )
+
+    _schnell(client, graph, graph.schueler_a, kurs, "2.0")
+
+    [note] = _noten_des_tages(session, graph.schueler_a)
+    assert note.notenwert == Decimal("2.0")
+    assert note.notiz == "Trug die Diskussion."
+
+
+def test_das_platzmenue_ist_mit_der_heutigen_note_vorbelegt(
+    client, session, graph, heute
+):
+    """A preset 3 would overwrite a 1- when only a remark is added later."""
+    kurs = _kurs_mit_vorgabegruppen(session, graph)
+    _setze(client, graph, 1, 1, graph.schueler_a, kurs)
+    client.post(
+        f"{url(graph)}/platz/1/1/mitarbeit",
+        data={"kurs": kurs.id, "notenwert": "1.3", "notiz": "Gute Frage."},
+        headers=HTMX,
+    )
+
+    antwort = client.get(
+        f"{url(graph)}/raster",
+        params={"modus": "mitarbeit", "reihe": 1, "position": 1, "kurs": kurs.id},
+        headers=HTMX,
+    )
+
+    assert 'value="1.3" selected' in antwort.text
+    assert 'value="3.0" selected' not in antwort.text
+    assert 'value="Gute Frage."' in antwort.text
+    assert "Heute schon eingetragen: 1−" in antwort.text
+
+
+def test_eine_gespeicherte_tendenz_bleibt_im_feld_sichtbar(
+    client, session, graph, heute
+):
+    """The plan offers whole grades only, but a 2- stored today -- from the
+    serial entry, say -- must not show as "–", as if there were no grade."""
+    from app.services import sitzplan as dienst
+
+    kurs = _kurs_mit_vorgabegruppen(session, graph)
+    dienst.mitarbeitsnote(session, kurs, graph.schueler_a, Decimal("2.3"), datum=SCHULTAG)
+    session.commit()
+
+    antwort = client.get(url(graph), params={"modus": "noten", "kurs": kurs.id})
+
+    feld = antwort.text.split(f'id="mitarbeit-{graph.schueler_a.id}"')[1].split("</select>")[0]
+    assert re.findall(r">([^<]*)</option>", feld) == ["–", "1", "2", "2−", "3", "4", "5", "6"]
+    assert 'value="2.3" selected' in feld
+    # Only the stored one; no other Tendenz is offered.
+    anderes = antwort.text.split(f'id="mitarbeit-{graph.schueler_b.id}"')[1].split("</select>")[0]
+    assert "2−" not in anderes
+
+
+def test_ohne_eigene_note_bleibt_das_platzmenue_auf_drei(client, session, graph, heute):
+    kurs = _kurs_mit_vorgabegruppen(session, graph)
+    _setze(client, graph, 1, 1, graph.schueler_a, kurs)
+
+    antwort = client.get(
+        f"{url(graph)}/raster",
+        params={"modus": "mitarbeit", "reihe": 1, "position": 1, "kurs": kurs.id},
+        headers=HTMX,
+    )
+
+    assert 'value="3.0" selected' in antwort.text
+    assert "Heute schon eingetragen" not in antwort.text
+
+
+def test_ohne_gruppe_mitarbeit_nennt_der_plan_den_grund(client, session, graph, heute):
+    """Said once above the grid, not thirty times after thirty taps."""
+    from app.db.models import Notengruppe
+
+    kurs = _kurs_mit_vorgabegruppen(session, graph)
+    gruppe = (
+        session.query(Notengruppe)
+        .filter_by(kurs_id=kurs.id, halbjahr_id=graph.halbjahr_1.id, bezeichnung="Mitarbeit")
+        .one()
+    )
+    gruppe.bezeichnung = "Mündlich"
+    session.commit()
+
+    seite = client.get(url(graph), params={"modus": "noten", "kurs": kurs.id})
+    antwort = _schnell(client, graph, graph.schueler_a, kurs, "1.0")
+
+    assert "keine Notengruppe „Mitarbeit“" in seite.text
+    assert 'class="mitarbeitsfeld' not in seite.text
+    assert antwort.status_code == 400
+    assert "keine Notengruppe" in antwort.text
+
+
+def test_in_den_ferien_gibt_es_keine_felder(client, session, graph, heute):
+    kurs = _kurs_mit_vorgabegruppen(session, graph)
+    heute(FERIENTAG)
+
+    seite = client.get(url(graph), params={"modus": "noten", "kurs": kurs.id})
+
+    assert "In den Ferien" in seite.text
+    assert 'class="mitarbeitsfeld' not in seite.text
+
+
+def test_ein_schueler_einer_anderen_klasse_wird_abgewiesen(
+    client, session, graph, heute
+):
+    from app.db.models import Schueler
+    from app.services import verwaltung
+
+    kurs = _kurs_mit_vorgabegruppen(session, graph)
+    andere = verwaltung.lege_klasse_an(session, graph.schuljahr, "BFS 26b")
+    fremd = Schueler(klasse=andere, vorname="Carla", nachname="Fremd")
+    session.add(fremd)
+    session.commit()
+
+    antwort = _schnell(client, graph, fremd, kurs, "1.0")
+
+    assert antwort.status_code == 400
+    assert "kein aktiver Schüler dieser Klasse" in antwort.text
+
+
+def test_ein_inaktiver_schueler_wird_abgewiesen(client, session, graph, heute):
+    kurs = _kurs_mit_vorgabegruppen(session, graph)
+    graph.schueler_a.ist_aktiv = False
+    session.commit()
+
+    antwort = _schnell(client, graph, graph.schueler_a, kurs, "1.0")
+
+    assert antwort.status_code == 400
+    assert _noten_des_tages(session, graph.schueler_a) == []
+
+
+def test_ein_status_statt_einer_note_wird_abgewiesen(client, session, graph, heute):
+    kurs = _kurs_mit_vorgabegruppen(session, graph)
+
+    antwort = _schnell(client, graph, graph.schueler_a, kurs, "nicht_erbracht")
+
+    assert antwort.status_code == 400
+    assert "keine gültige Note" in antwort.text
+    assert _noten_des_tages(session, graph.schueler_a) == []
+
+
+def test_ohne_javascript_fuehrt_das_speichern_zurueck_in_die_schnelleingabe(
+    client, session, graph, heute
+):
+    kurs = _kurs_mit_vorgabegruppen(session, graph)
+
+    antwort = _schnell(client, graph, graph.schueler_a, kurs, "2.0", htmx=False)
+
+    assert antwort.status_code == 303
+    assert antwort.headers["location"] == (
+        f"/klassen/{graph.klasse.id}/sitzplan?modus=noten&kurs={kurs.id}"
+    )
+    assert len(_noten_des_tages(session, graph.schueler_a)) == 1

@@ -705,6 +705,80 @@ table.matrix.spiegel .wert {
   margin-bottom: 0.5rem;
 }
 
+/* Schnelleingabe der Mitarbeitsnote (5.6): ein Auswahlfeld unter jedem
+   Schüler. Die Bestätigung steht am Feld selbst, wie in der Serieneingabe
+   an der Zeile -- mehrere Felder können gleichzeitig unterwegs sein. */
+
+.notenhinweis {
+  background: #f7f9fc;
+  border-left: 4px solid var(--akzent);
+  font-size: 0.875rem;
+  margin: 0 0 0.75rem;
+  padding: 0.375rem 0.5rem;
+}
+
+.mitarbeitsfeld {
+  margin: 0.25rem 0 0;
+}
+
+.mitarbeitsfeld select {
+  margin: 0;
+  min-height: var(--tippziel);
+  padding: 0.25rem;
+  text-align: center;
+  width: 100%;
+}
+
+.feldzustand {
+  display: block;
+  font-size: 0.75rem;
+  line-height: 1.2;
+  min-height: 0.9rem;
+  text-align: center;
+}
+
+.mitarbeitsfeld.gespeichert select {
+  border-color: #1f7a3f;
+  box-shadow: inset 0 0 0 1px #1f7a3f;
+}
+
+.feldzustand[data-zustand="gespeichert"] {
+  color: #1f7a3f;
+  font-weight: 600;
+}
+
+.mitarbeitsfeld.sendet .feldzustand {
+  color: var(--gedaempft);
+}
+
+.mitarbeitsfeld.fehlgeschlagen select {
+  border-color: var(--fehler-linie);
+  box-shadow: inset 0 0 0 2px var(--fehler-linie);
+}
+
+.feldzustand[data-zustand="fehler"] {
+  background: var(--fehler-grund);
+  color: var(--fehler-linie);
+  font-weight: 700;
+}
+
+.feldhinweis {
+  color: var(--gedaempft);
+  display: block;
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+  text-align: center;
+}
+
+/* Noten gehören nicht in den Ausdruck (5.6). */
+@media print {
+  .notenhinweis,
+  .mitarbeitsfeld,
+  .feldhinweis {
+    display: none;
+  }
+}
+
 /* „arbeitet digital" (Spezifikation 3.1, 5.1, 5.6). Die Fläche ist die
    bequeme Erkennung, der Punkt die verlässliche: Farbe allein trägt keine
    Information, und Browser lassen Hintergrundfarben beim Drucken weg. */

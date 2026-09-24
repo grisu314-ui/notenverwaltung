@@ -1,0 +1,29 @@
+{# Today's participation grade for one pupil, in the quick entry (5.6).
+   Also the htmx answer after saving, which is why it renders the stored
+   state and never an optimistic one (10): the select shows what is in the
+   database, the tick only appears after the server said so.
+
+   Keyed by pupil, not by seat -- the grade goes to the name next to it.
+   Expects `s`, `kurs`, `tagesstand`, `mitarbeitsauswahl`. #}
+{% set note = tagesstand.noten.get(s.id) %}
+{% set ziel = "/klassen/" ~ klasse.id ~ "/sitzplan/mitarbeit/" ~ s.id %}
+<form id="mitarbeit-{{ s.id }}" method="post" action="{{ ziel }}"
+      hx-post="{{ ziel }}"
+      hx-trigger="change from:find select"
+      hx-target="this"
+      hx-swap="outerHTML"
+      class="mitarbeitsfeld{% if feld_gespeichert %} gespeichert{% endif %}">
+  <input type="hidden" name="kurs" value="{{ kurs.id }}">
+  <select name="notenwert" aria-label="Mitarbeitsnote heute für {{ s.vorname }} {{ s.nachname }}">
+    <option value=""{% if note is none %} selected{% endif %}>–</option>
+    {% for schluessel, beschriftung in mitarbeitsauswahl(note.notenwert if note is not none else none) %}
+      <option value="{{ schluessel }}"{% if note is not none and schluessel == note.notenwert | string %} selected{% endif %}>{{ beschriftung }}</option>
+    {% endfor %}
+  </select>
+  <noscript><button type="submit">Speichern</button></noscript>
+  <span class="feldzustand" data-zustand="{{ 'gespeichert' if feld_gespeichert else 'ruhe' }}">
+    {%- if feld_gespeichert -%}
+      {%- if note is not none %}✓ {{ note.geaendert_am | uhrzeit }}{% else %}✓ gelöscht{% endif -%}
+    {%- endif -%}
+  </span>
+</form>

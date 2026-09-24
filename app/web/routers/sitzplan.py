@@ -13,6 +13,9 @@ The course travels in the URL for the same reason. The plan belongs to a
 class, a grade belongs to a course, and the chosen course is what bridges the
 two for the participation grade of the day (5.6). Without one the plan simply
 does not offer it.
+
+Two ways to that grade: the seat menu, one pupil with a remark, and the quick
+entry (mode ``noten``), a select under every pupil that saves on change.
 """
 
 import logging
@@ -47,6 +50,8 @@ MODUS_ZUWEISEN = "zuweisen"
 MODUS_MENU = "menu"
 MODUS_TAUSCHEN = "tauschen"
 MODUS_MITARBEIT = "mitarbeit"
+# The quick entry: a participation grade select under every pupil.
+MODUS_NOTEN = "noten"
 MODI = (
     MODUS_ANSICHT,
     MODUS_BEARBEITEN,
@@ -54,6 +59,7 @@ MODI = (
     MODUS_MENU,
     MODUS_TAUSCHEN,
     MODUS_MITARBEIT,
+    MODUS_NOTEN,
 )
 
 # The modes that need a selected seat. Without one they fall back to the plain
@@ -71,14 +77,25 @@ def als_notenwert(wert: str) -> Decimal:
         ) from fehler
 
 
-def notenauswahl() -> list[tuple[str, str]]:
-    """The sixteen values for the participation grade (4.1).
+GANZE_NOTEN = tuple(wert for wert in NOTENWERTE if wert == wert.to_integral_value())
 
-    No "nicht gewertet" and no "nicht erbracht": a participation grade is
-    always counted, because there is no performance somebody failed to
-    deliver (5.6).
+
+def mitarbeitsauswahl(vorhanden: Decimal | None = None) -> list[tuple[str, str]]:
+    """What the plan offers for a participation grade: 1 to 6, no Tendenz (5.6).
+
+    No "nicht gewertet" and no "nicht erbracht" either: a participation grade
+    is always counted, because there is no performance somebody failed to
+    deliver.
+
+    The restriction is on the offer, not on the data. A grade stored with a
+    Tendenz -- entered in the serial entry, or before this rule -- is added
+    to the list, so the select shows what is stored instead of falling back
+    to "–" and suggesting there is no grade.
     """
-    return [(str(wert), als_anzeige(wert)) for wert in NOTENWERTE]
+    werte = list(GANZE_NOTEN)
+    if vorhanden is not None and vorhanden not in werte:
+        werte = sorted([*werte, vorhanden])
+    return [(str(wert), als_anzeige(wert)) for wert in werte]
 
 
 def _gewaehlter_kurs(session: Session, klasse: Klasse, kurs_id: int | None) -> Kurs | None:
@@ -119,6 +136,13 @@ def _umfeld(
     if modus == MODUS_MITARBEIT and (kurs is None or gewaehlt is None or gewaehlt.ist_frei):
         modus = MODUS_BEARBEITEN
 
+    heute = heute_lokal()
+    # Today's grades are read only where a grade is being entered. The plan
+    # shows no grades otherwise (5.6), and the print never.
+    tagesstand = None
+    if kurs is not None and modus in (MODUS_NOTEN, MODUS_MITARBEIT):
+        tagesstand = dienst.tagesstand(session, kurs, heute)
+
     return {
         "klasse": klasse,
         "blatt": blatt,
@@ -126,8 +150,9 @@ def _umfeld(
         "auswahl": gewaehlt,
         "kurs": kurs,
         "kurse": sortiert_nach_bezeichnung(klasse.kurse, "fach"),
-        "notenauswahl": notenauswahl(),
-        "heute": heute_lokal(),
+        "mitarbeitsauswahl": mitarbeitsauswahl,
+        "heute": heute,
+        "tagesstand": tagesstand,
         "einstellungen": lies_einstellungen(session),
         "gerade_gespeichert": gerade_gespeichert,
         "meldung": meldung,
@@ -308,6 +333,74 @@ def mitarbeitsnote(
             kurs_id=kurs,
             meldung=meldung,
         ),
+    )
+
+
+@router.post("/mitarbeit/{schueler_id}")
+def schnelle_mitarbeitsnote(
+    request: Request,
+    klasse_id: int,
+    schueler_id: int,
+    kurs: int = Form(...),
+    notenwert: str = Form(""),
+    session: Session = Depends(datenbanksitzung),
+):
+    """One select of the quick entry: set, change or take back today's grade.
+
+    Keyed by pupil, not by seat, unlike the seat menu. The select sits right
+    under a photo and a name; if the seating changed in the meantime, the
+    grade still has to go to the person whose name was next to it.
+
+    "–" deletes today's grade, as "keine Note" does in the serial entry. The
+    remark is left alone either way -- this form has no field for it.
+    """
+    klasse = hole(session, Klasse, klasse_id)
+    gewaehlter_kurs = _gewaehlter_kurs(session, klasse, kurs)
+    if gewaehlter_kurs is None:
+        raise Verwaltungsfehler(
+            "Für diese Klasse ist kein Kurs gewählt. Bitte oben den Kurs "
+            "auswählen, in dem gerade unterrichtet wird."
+        )
+    schueler = hole(session, Schueler, schueler_id)
+    if schueler.klasse_id != klasse.id or not schueler.ist_aktiv:
+        raise Verwaltungsfehler(
+            f"{schueler.vorname} {schueler.nachname} ist kein aktiver Schüler "
+            "dieser Klasse. Bitte die Seite neu laden."
+        )
+
+    heute = heute_lokal()
+    with uebersetzte_datenbankfehler(session):
+        if notenwert.strip() == "":
+            dienst.loesche_mitarbeitsnote(session, gewaehlter_kurs, schueler, heute)
+        else:
+            dienst.mitarbeitsnote(
+                session,
+                gewaehlter_kurs,
+                schueler,
+                als_notenwert(notenwert),
+                notiz=None,
+                datum=heute,
+            )
+        session.commit()
+
+    if request.headers.get("HX-Request") != "true":
+        return RedirectResponse(
+            f"/klassen/{klasse_id}/sitzplan?modus={MODUS_NOTEN}&kurs={gewaehlter_kurs.id}",
+            WEITERLEITUNG,
+        )
+    # Rendered after the commit, from what was stored: the select shows the
+    # grade in the database, not the one that was sent (10).
+    return templates.TemplateResponse(
+        request=request,
+        name="_mitarbeitsfeld.html",
+        context={
+            "klasse": klasse,
+            "kurs": gewaehlter_kurs,
+            "s": schueler,
+            "tagesstand": dienst.tagesstand(session, gewaehlter_kurs, heute),
+            "mitarbeitsauswahl": mitarbeitsauswahl,
+            "feld_gespeichert": True,
+        },
     )
 
 

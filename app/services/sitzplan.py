@@ -1,7 +1,8 @@
 """The seating plan of a class (specification 5.6).
 
 A view onto pupils. The one grade it touches is the participation grade of
-the current day -- see :func:`mitarbeitsnote` at the end of this module.
+the current day -- see :func:`mitarbeitsnote` and the quick entry's
+:func:`tagesstand` at the end of this module.
 
 Two rules of the section need code rather than a constraint, because SQLite
 allows no subquery in a CHECK:
@@ -401,6 +402,31 @@ def _mitarbeitsgruppe(
     return None
 
 
+def _mitarbeitsgruppe_am(session: Session, kurs: Kurs, datum: date) -> Notengruppe:
+    """The group a participation grade on this date belongs in, or a refusal.
+
+    One place for both refusals, so the quick entry can say up front what the
+    single entry would only say after a tap.
+    """
+    halbjahr = halbjahr_zum_datum(kurs, datum)
+    if halbjahr is None:
+        raise Verwaltungsfehler(
+            f"Der {datum.strftime('%d.%m.%Y')} liegt in keinem Halbjahr des "
+            f"Schuljahres {kurs.klasse.schuljahr.bezeichnung}. In den Ferien lässt "
+            "sich keine Mitarbeitsnote eintragen."
+        )
+
+    gruppe = _mitarbeitsgruppe(session, kurs, halbjahr)
+    if gruppe is None:
+        raise Verwaltungsfehler(
+            f"Der Kurs {kurs.fach} hat im {halbjahr.nummer}. Halbjahr keine "
+            f"Notengruppe „{BEZEICHNUNG_MITARBEIT}“. Bitte in der Verwaltung "
+            "anlegen — die Anwendung legt sie nicht selbst an, weil ihr Gewicht "
+            "die Note verändert."
+        )
+    return gruppe
+
+
 def bezeichnung_der_tagesleistung(datum: date) -> str:
     return f"{BEZEICHNUNG_MITARBEIT} {datum.strftime('%d.%m.%Y')}"
 
@@ -427,7 +453,11 @@ def mitarbeitsnote(
 
     Always ``gewertet``: there is no performance somebody failed to deliver,
     so the other two statuses have no meaning here. A grade given by mistake
-    is deleted, not reclassified.
+    is deleted, not reclassified (:func:`loesche_mitarbeitsnote`).
+
+    ``notiz=None`` leaves an existing remark as it is -- the quick entry has
+    no remark field and must not wipe one given earlier. An empty or blank
+    string removes it.
 
     The assessment for the day is created on the first grade of that day, not
     in advance. A pupil who gets nothing has no row -- that is not a missing
@@ -439,23 +469,7 @@ def mitarbeitsnote(
             "Der Kurs gehört nicht zu der Klasse, in der dieser Schüler ist."
         )
 
-    halbjahr = halbjahr_zum_datum(kurs, datum)
-    if halbjahr is None:
-        raise Verwaltungsfehler(
-            f"Der {datum.strftime('%d.%m.%Y')} liegt in keinem Halbjahr des "
-            f"Schuljahres {kurs.klasse.schuljahr.bezeichnung}. In den Ferien lässt "
-            "sich keine Mitarbeitsnote eintragen."
-        )
-
-    gruppe = _mitarbeitsgruppe(session, kurs, halbjahr)
-    if gruppe is None:
-        raise Verwaltungsfehler(
-            f"Der Kurs {kurs.fach} hat im {halbjahr.nummer}. Halbjahr keine "
-            f"Notengruppe „{BEZEICHNUNG_MITARBEIT}“. Bitte in der Verwaltung "
-            "anlegen — die Anwendung legt sie nicht selbst an, weil ihr Gewicht "
-            "die Note verändert."
-        )
-
+    gruppe = _mitarbeitsgruppe_am(session, kurs, datum)
     leistung = _tagesleistung(session, gruppe, datum)
     if leistung is None:
         leistung = notendienst.lege_leistung_an(
@@ -471,9 +485,76 @@ def mitarbeitsnote(
     )
     # Set after the grade: setze_note returns early when value and status did
     # not change, and a note that only got a new remark still has to be saved.
-    note.notiz = (notiz or "").strip() or None
+    if notiz is not None:
+        note.notiz = notiz.strip() or None
     session.flush()
     logger.info(
         "Mitarbeitsnote für Schüler %s in Kurs %s am %s", schueler.id, kurs.id, datum
     )
     return note
+
+
+def loesche_mitarbeitsnote(
+    session: Session, kurs: Kurs, schueler: Schueler, datum: date | None = None
+) -> bool:
+    """Take back today's participation grade. Caller commits.
+
+    Deleted, not reclassified (5.6), and recorded in the history like any
+    other deletion. Returns whether there was a grade to delete.
+
+    The day's assessment stays even when its last grade goes, as it does when
+    a grade is deleted in the serial entry. Without grades it has no weight
+    (4.4); it only shows as an empty column in the course overview.
+    """
+    datum = datum or heute_lokal()
+    if kurs.klasse_id != schueler.klasse_id:
+        raise Verwaltungsfehler(
+            "Der Kurs gehört nicht zu der Klasse, in der dieser Schüler ist."
+        )
+    gruppe = _mitarbeitsgruppe_am(session, kurs, datum)
+    leistung = _tagesleistung(session, gruppe, datum)
+    if leistung is None or notendienst.note_von(leistung, schueler) is None:
+        return False
+    notendienst.loesche_note(session, leistung, schueler)
+    logger.info(
+        "Mitarbeitsnote gelöscht für Schüler %s in Kurs %s am %s",
+        schueler.id,
+        kurs.id,
+        datum,
+    )
+    return True
+
+
+@dataclass(frozen=True)
+class Tagesstand:
+    """Today in one course, as the quick entry on the plan needs it (5.6).
+
+    ``hindernis`` is the sentence that would refuse every grade today -- a
+    holiday, or no group "Mitarbeit" in this term. The plan says it once
+    instead of offering thirty fields that would each be refused.
+    """
+
+    datum: date
+    hindernis: str | None
+    # Pupils who actively take the course. Only they can be graded in it.
+    teilnehmer: frozenset[int]
+    # Today's participation grade per pupil id. No entry means no grade today
+    # -- not a missing value (4.4).
+    noten: dict[int, Note]
+
+
+def tagesstand(session: Session, kurs: Kurs, datum: date | None = None) -> Tagesstand:
+    datum = datum or heute_lokal()
+    teilnehmer = frozenset(
+        teilnahme.schueler_id for teilnahme in kurs.teilnahmen if teilnahme.ist_aktiv
+    )
+    try:
+        gruppe = _mitarbeitsgruppe_am(session, kurs, datum)
+    except Verwaltungsfehler as grund:
+        # Not swallowed: the sentence is what the plan shows in place of the
+        # fields, and a tap would get the same one from mitarbeitsnote().
+        return Tagesstand(datum, str(grund), teilnehmer, {})
+
+    leistung = _tagesleistung(session, gruppe, datum)
+    noten = {note.schueler_id: note for note in leistung.noten} if leistung else {}
+    return Tagesstand(datum, None, teilnehmer, noten)

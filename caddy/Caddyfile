@@ -1,0 +1,32 @@
+# Die Pforte vor der Anwendung (Spezifikation 2).
+#
+# HTTP Basic Auth auf Infrastrukturebene. Die Anwendung selbst hat weiterhin
+# keine Authentifizierung und bekommt von alledem nichts mit.
+#
+# Benutzer und Hash kommen aus der Umgebung (PFORTE_USER, PFORTE_HASH in der
+# .env neben der Compose-Datei), nicht aus dieser Datei: Sie liegt im
+# Repository.
+#
+# Nach einer Änderung hier:  docker compose restart pforte
+# Ein `caddy reload` geht nicht -- die Admin-API ist abgeschaltet.
+{
+	# Sonst lauscht auf Port 2019 eine Konfigurationsschnittstelle, und die
+	# wäre aus dem Tailnet erreichbar.
+	admin off
+	# Kein ACME, keine Zertifikatsanfragen nach draußen. Verschlüsselt ist der
+	# Verkehr durch das Tailnet (Spezifikation 2, Punkt 6).
+	auto_https off
+}
+
+:8000 {
+	basic_auth {
+		{$PFORTE_USER} {$PFORTE_HASH}
+	}
+	# `anwendung`, NICHT `notenverwaltung`: Die Pforte teilt sich mit dem
+	# Tailscale-Container dessen /etc/hosts, und dort steht wegen
+	# `hostname: notenverwaltung` die eigene Adresse des Sidecars. Mit dem
+	# Namen `notenverwaltung` leitet Caddy an sich selbst weiter und die
+	# Anfrage hängt. `anwendung` ist ein Alias der Anwendung im Netz `intern`
+	# und wird nur von Dockers DNS aufgelöst.
+	reverse_proxy anwendung:8000
+}

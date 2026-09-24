@@ -18,6 +18,21 @@
     {% if gerade_gespeichert %}gespeichert{% if meldung %} — {{ meldung }}{% endif %}{% endif %}
   </p>
 
+  {% if modus == "noten" %}
+    {# Said once, above the grid, instead of thirty fields that would each be
+       refused. #}
+    <p class="notenhinweis">
+      {% if not kurs %}
+        Für Mitarbeitsnoten oben den Kurs wählen, in dem gerade unterrichtet wird.
+      {% elif tagesstand.hindernis %}
+        {{ tagesstand.hindernis }}
+      {% else %}
+        <strong>Mitarbeitsnote {{ kurs.fach }}</strong> · {{ heute.strftime('%d.%m.%Y') }}.
+        Eine Auswahl speichert sofort, „–“ nimmt die heutige Note zurück.
+      {% endif %}
+    </p>
+  {% endif %}
+
   <ol class="sitzreihen">
     {% for reihe in blatt.reihen %}
       <li>
@@ -93,25 +108,32 @@
     </div>
 
   {% elif modus == "mitarbeit" %}
+    {# Filled with today's grade and remark if there is one. A preset "3"
+       would overwrite a 1- when only a remark is added afterwards. #}
+    {% set vorhanden = tagesstand.noten.get(auswahl.schueler.id) if tagesstand else none %}
     <div class="sitzauswahl">
       <h2>Mitarbeitsnote · {{ kurs.fach }}</h2>
       <p>
         {{ auswahl.schueler.vorname | anzeigename(auswahl.schueler.nachname, einstellungen.namensanzeige) }}
         <span class="hinweis">· {{ heute.strftime('%d.%m.%Y') }}</span>
       </p>
+      {% if vorhanden is not none %}
+        <p class="hinweis">Heute schon eingetragen: {{ vorhanden.notenwert | note_anzeige }}. Eintragen ändert sie.</p>
+      {% endif %}
       <form method="post" action="{{ adresse }}/platz/{{ auswahl.reihe }}/{{ auswahl.position }}/mitarbeit"
             hx-post="{{ adresse }}/platz/{{ auswahl.reihe }}/{{ auswahl.position }}/mitarbeit"
             hx-target="#sitzplan" hx-swap="outerHTML" class="mitarbeitsform">
         <input type="hidden" name="kurs" value="{{ kurs.id }}">
         <label>Note
           <select name="notenwert" required>
-            {% for schluessel, beschriftung in notenauswahl %}
-              <option value="{{ schluessel }}"{% if beschriftung == '3' %} selected{% endif %}>{{ beschriftung }}</option>
+            {% for schluessel, beschriftung in mitarbeitsauswahl(vorhanden.notenwert if vorhanden is not none else none) %}
+              <option value="{{ schluessel }}"{% if (vorhanden is not none and schluessel == vorhanden.notenwert | string) or (vorhanden is none and beschriftung == '3') %} selected{% endif %}>{{ beschriftung }}</option>
             {% endfor %}
           </select>
         </label>
         <label>Notiz
-          <input name="notiz" maxlength="500" placeholder="Wofür, in drei Worten">
+          <input name="notiz" maxlength="500" placeholder="Wofür, in drei Worten"
+                 value="{{ vorhanden.notiz or '' if vorhanden is not none else '' }}">
         </label>
         <button type="submit">Eintragen</button>
       </form>
@@ -141,6 +163,8 @@
             {% else %}
               <span class="kachel schuelerkachel">{% include "_sitzbild.html" %}</span>
             {% endif %}
+            {# Without a seat is no reason to go without a grade. #}
+            {% if modus == "noten" %}{% include "_mitarbeitswahl.html" %}{% endif %}
           </li>
         {% endfor %}
       </ul>

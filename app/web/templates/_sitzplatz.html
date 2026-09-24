@@ -1,13 +1,25 @@
 {# One seat. What a tap does depends on the mode -- in the view mode it opens
    the pupil, in the edit modes it selects the seat, in the swap mode it is
-   the target of the swap. Every variant carries a plain link or form as well,
-   so the plan works without JavaScript. #}
+   the target of the swap, in the quick entry the seat itself does nothing and
+   the select under it takes the grade. Every variant carries a plain link or
+   form as well, so the plan works without JavaScript. #}
 {% set adresse = "/klassen/" ~ klasse.id ~ "/sitzplan" %}
 {% if modus == "ansicht" %}
   {% if platz.schueler %}
     <a class="platz belegt{% if platz.schueler.arbeitet_digital %} digital{% endif %}" href="/schueler/{{ platz.schueler.id }}">
       {% with s = platz.schueler %}{% include "_sitzbild.html" %}{% endwith %}
     </a>
+  {% else %}
+    <span class="platz leer" aria-label="Reihe {{ platz.reihe }}, Platz {{ platz.position }} frei"></span>
+  {% endif %}
+
+{% elif modus == "noten" %}
+  {# Not a link: a stray touch between two grades must not leave the page. #}
+  {% if platz.schueler %}
+    <span class="platz belegt{% if platz.schueler.arbeitet_digital %} digital{% endif %}">
+      {% with s = platz.schueler %}{% include "_sitzbild.html" %}{% endwith %}
+    </span>
+    {% with s = platz.schueler %}{% include "_mitarbeitswahl.html" %}{% endwith %}
   {% else %}
     <span class="platz leer" aria-label="Reihe {{ platz.reihe }}, Platz {{ platz.position }} frei"></span>
   {% endif %}
