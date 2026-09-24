@@ -42,8 +42,8 @@ dann von Hand ausgeführt. Wer Anweisungen dafür schreibt, prüft sie gegen den
 Code, statt sie zu erfinden — und sagt dazu, was ungeprüft blieb.
 
 Was der Betreiber dafür braucht: Shell-Zugang auf dem TrueNAS mit `sudo`,
-Dockge, das Tailscale-Konto, das GitHub-Repository und das Passwort der
-Pforte. Ohne den Tailscale-Zugang ist die Anwendung nicht erreichbar — es gibt
+Dockge, das Tailscale-Konto, das GitHub-Repository (das NAS liest es über
+einen Deploy Key) und das Passwort der Pforte. Ohne den Tailscale-Zugang ist die Anwendung nicht erreichbar — es gibt
 keinen zweiten Weg hinein. Das ist Absicht. Ein vergessenes Passwort der
 Pforte ist dagegen kein Verlust: Wer Shell-Zugang hat, setzt ein neues
 (README, „Zugang & Passwort ändern").
@@ -59,6 +59,11 @@ Alles unter `/mnt/Daten-Z1/apps/notenverwaltung` auf dem NAS:
 | `tailscale/` | Knotenzustand des Sidecars | root:root |
 | `pforte/` | Caddys Zustand; enthält den Passwort-Hash | root:root |
 | (Wurzel) | der Quellbaum, zugleich Git-Arbeitsverzeichnis; darin `caddy/Caddyfile` | root:root |
+
+Außerhalb davon, daneben: `/mnt/Daten-Z1/apps/git-zugang/` mit dem
+Lesezugang des NAS zu GitHub (Deploy Key, `inbetriebnahme-truenas.md`,
+Schritt 2). Geht er verloren, wird ein neuer Schlüssel erzeugt und bei GitHub
+eingetragen — Daten sind davon nicht betroffen.
 
 Eine einzige SQLite-Datei. Kein zweiter Speicherort, keine Dateien im
 Dateisystem, keine externen Dienste. Fotos liegen als BLOB in derselben Datei

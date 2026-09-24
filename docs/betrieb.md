@@ -76,9 +76,15 @@ und wird nicht auf einen Zweig umgestellt: Er liegt eine Ebene über `daten/`
 und `sicherungen/`, und die nächste Version soll von dort aus gebaut werden
 können, ohne dass jemand erst den Zweig zurückstellen muss.
 
+Geholt wird über den Deploy Key (`inbetriebnahme-truenas.md`, Schritt 2) —
+beim Klonen einmal auf der Kommandozeile, danach steht er in der
+`.git/config` des Testbaums:
+
 ```bash
-sudo git clone https://github.com/grisu314-ui/notenverwaltung.git /mnt/Daten-Z1/apps/notenverwaltung-dev
+ZUGANG="ssh -i /mnt/Daten-Z1/apps/git-zugang/deploy_key -o IdentitiesOnly=yes -o UserKnownHostsFile=/mnt/Daten-Z1/apps/git-zugang/known_hosts"
+sudo git -c core.sshCommand="$ZUGANG" clone git@github.com:grisu314-ui/notenverwaltung.git /mnt/Daten-Z1/apps/notenverwaltung-dev
 cd /mnt/Daten-Z1/apps/notenverwaltung-dev
+sudo git config core.sshCommand "$ZUGANG"
 sudo git checkout ZU-TESTENDER-ZWEIG
 
 sudo mkdir -p daten sicherungen tailscale pforte

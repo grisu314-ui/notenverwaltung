@@ -112,6 +112,71 @@ sondern im Quellbaum (`caddy/Caddyfile`) und kommt mit Schritt 2.
 
 ## Schritt 2 — Quelle auf das NAS
 
+### Lesezugang zu GitHub (Deploy Key)
+
+Das NAS holt den Quellcode über einen **Deploy Key**: einen SSH-Schlüssel, der
+genau dieses eine Repository lesen darf, nicht schreiben, und nicht abläuft.
+Damit fragt `git fetch` nie wieder nach einer Anmeldung.
+
+**Alles davon liegt auf `Daten-Z1`, nichts in `/root`.** Heimatverzeichnisse
+überstehen ein TrueNAS-Update nicht zuverlässig; ein Schlüssel unter
+`/root/.ssh` wäre nach dem nächsten Update womöglich weg. Das Verzeichnis
+`git-zugang/` liegt neben den Arbeitsbäumen, nicht in ihnen — so taucht es
+weder in `git status` noch im Build-Kontext auf.
+
+Einmalig, als root:
+
+```bash
+mkdir -p /mnt/Daten-Z1/apps/git-zugang
+chmod 700 /mnt/Daten-Z1/apps/git-zugang
+ssh-keygen -t ed25519 -N "" -C "truenas notenverwaltung nur-lesen" \
+    -f /mnt/Daten-Z1/apps/git-zugang/deploy_key
+cat /mnt/Daten-Z1/apps/git-zugang/deploy_key.pub
+```
+
+Ohne Passphrase, sonst fragt jedes `git fetch` wieder nach etwas. Vertretbar,
+weil der Schlüssel nur dieses Repository lesen kann — und wer root auf dem NAS
+hat, hat den Quellbaum ohnehin.
+
+Die ausgegebene Zeile bei GitHub eintragen: Repository → **Settings → Deploy
+keys → Add deploy key**, Titel etwa „TrueNAS (nur lesen)". **„Allow write
+access" nicht ankreuzen.**
+
+GitHubs eigenen Schlüssel festhalten und prüfen:
+
+```bash
+ssh-keyscan -t ed25519 github.com > /mnt/Daten-Z1/apps/git-zugang/known_hosts
+ssh-keygen -lf /mnt/Daten-Z1/apps/git-zugang/known_hosts
+```
+
+Die Ausgabe muss `SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU`
+enthalten — der Fingerabdruck, den GitHub veröffentlicht („GitHub's SSH key
+fingerprints" in der GitHub-Doku). Steht dort etwas anderes: abbrechen.
+
+Verbindung prüfen:
+
+```bash
+ssh -i /mnt/Daten-Z1/apps/git-zugang/deploy_key -o IdentitiesOnly=yes -o UserKnownHostsFile=/mnt/Daten-Z1/apps/git-zugang/known_hosts -T git@github.com
+```
+
+Erwartet: `Hi grisu314-ui/notenverwaltung! You've successfully authenticated,
+but GitHub does not provide shell access.`
+
+Jeder Arbeitsbaum bekommt den Schlüssel über `core.sshCommand` in seiner
+eigenen `.git/config` — die liegt im Arbeitsbaum, also ebenfalls auf
+`Daten-Z1`. Ein bestehender Baum, der noch über HTTPS holt, wird so umgestellt:
+
+```bash
+cd /mnt/Daten-Z1/apps/notenverwaltung
+git remote set-url origin git@github.com:grisu314-ui/notenverwaltung.git
+git config core.sshCommand "ssh -i /mnt/Daten-Z1/apps/git-zugang/deploy_key -o IdentitiesOnly=yes -o UserKnownHostsFile=/mnt/Daten-Z1/apps/git-zugang/known_hosts"
+git fetch origin
+```
+
+`git push` vom NAS aus geht damit nicht — gewollt, das NAS holt nur.
+
+### Der Arbeitsbaum
+
 Der Quellbaum kommt in das Dataset `/mnt/Daten-Z1/apps/notenverwaltung`, also
 **eine Ebene über** `daten/` und `sicherungen/`.
 
@@ -122,7 +187,8 @@ vorhandenes Verzeichnis ist deshalb:
 ```bash
 cd /mnt/Daten-Z1/apps/notenverwaltung
 git init
-git remote add origin https://github.com/grisu314-ui/notenverwaltung.git
+git remote add origin git@github.com:grisu314-ui/notenverwaltung.git
+git config core.sshCommand "ssh -i /mnt/Daten-Z1/apps/git-zugang/deploy_key -o IdentitiesOnly=yes -o UserKnownHostsFile=/mnt/Daten-Z1/apps/git-zugang/known_hosts"
 git fetch origin
 git checkout -b main origin/main
 ```
@@ -446,6 +512,9 @@ solange noch keine echten Daten in der Datenbank stehen.
 | `502 Bad Gateway` nach der Passworteingabe | Die Pforte läuft, die Anwendung nicht | `docker logs notenverwaltung` — meist eine ausstehende Migration oder die fehlende Datenbank |
 | Nach der Passworteingabe lädt die Seite endlos | Das Caddyfile leitet an `notenverwaltung` statt an `anwendung` weiter; die Pforte ruft sich selbst auf | `caddy/Caddyfile` aus dem Repository wiederherstellen, `docker compose restart pforte` |
 | Nicht erreichbar, obwohl alle drei Container `Up` zeigen | Der Sidecar wurde allein neu gestartet; die Pforte hängt noch in seinem alten, verwaisten Netz | `docker restart notenverwaltung-pforte` (nachgestellt) |
+| `git fetch`: `Permission denied (publickey)` | Deploy Key nicht bei GitHub eingetragen, oder `core.sshCommand` fehlt in diesem Arbeitsbaum | Schritt 2, „Lesezugang zu GitHub"; `git config core.sshCommand` zeigt, ob er gesetzt ist |
+| `git fetch`: `Host key verification failed` | `git-zugang/known_hosts` fehlt oder ist leer | `ssh-keyscan`-Zeile aus Schritt 2 wiederholen, Fingerabdruck prüfen |
+| `git fetch` fragt wieder nach Benutzer und Passwort | Der Baum holt noch über HTTPS | `git remote set-url origin git@github.com:…`, siehe Schritt 2 |
 | Stack startet in Dockge nicht, ohne brauchbare Meldung | verschiedene | In der Shell nachstellen, siehe unten |
 
 ### Der Stack startet in Dockge nicht
