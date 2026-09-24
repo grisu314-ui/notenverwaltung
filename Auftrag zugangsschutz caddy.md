@@ -1,4 +1,24 @@
 # Auftrag: Zugangsschutz per Caddy-Pforte (Infrastruktur, nicht Anwendung)
+
+> **Umgesetzt am 24.09.2026** (Spezifikation 1.4, Abschnitt 2). Maßgeblich sind
+> jetzt `docker-compose.truenas.yml`, `docker-compose.yml` und `caddy/Caddyfile`,
+> nicht die Auszüge unten. Abweichungen, alle nachgemessen:
+>
+> - **3.2:** `reverse_proxy anwendung:8000` statt `notenverwaltung:8000`. In der
+>   Pforte löst `notenverwaltung` über das geteilte `/etc/hosts` des Sidecars
+>   auf den Sidecar selbst auf; die Anfrage hing. `anwendung` ist ein Netz-Alias
+>   der Anwendung im Netz `intern`.
+> - **3.1:** Auch `docker-compose.truenas.yml` (der produktive Stack) ist
+>   angepasst, dort mit absoluten Pfaden: `caddy/` aus dem Quellbaum,
+>   Caddy-Zustand unter `pforte/` statt benannter Volumes.
+> - **5, Punkt 1:** `docker compose config` zeigt den Hash mit `$$`; geprüft wird
+>   mit `docker exec notenverwaltung-pforte printenv PFORTE_HASH`.
+> - **5, Punkt 4:** `curl -I` ergibt `405` (die Anwendung beantwortet HEAD
+>   nicht); geprüft wird mit GET. Anleitung: `docs/inbetriebnahme-truenas.md`,
+>   „Abnahme der Pforte".
+> - **6:** Die ersetzte Festlegung stand in Abschnitt 2 der Spezifikation
+>   („Zugangsschutz über Tailscale-ACLs"), nicht in Abschnitt 6; Authelia war
+>   schon seit Version 1.1 gestrichen.
  
 ## Hinweis zur Spezifikation – bitte zuerst lesen
  

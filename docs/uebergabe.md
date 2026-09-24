@@ -10,9 +10,9 @@ Vorstellungen davon, was eine Anwendung braucht.
 ## Was das ist
 
 Eine Webanwendung zur Notenverwaltung für **eine einzige Lehrkraft** an einer
-berufsbildenden Schule in Rheinland-Pfalz. Sie läuft in zwei Containern auf
+berufsbildenden Schule in Rheinland-Pfalz. Sie läuft in drei Containern auf
 einem TrueNAS-SCALE-Server im Haus des Betreibers und ist ausschließlich über
-dessen Tailnet erreichbar.
+dessen Tailnet erreichbar, hinter einer Passwortabfrage (Caddy-Pforte).
 
 Sie ist **produktiv** und enthält Klarnamen und Lichtbilder realer
 Schülerinnen und Schüler. Das ist die wichtigste Eigenschaft dieses Projekts:
@@ -33,6 +33,7 @@ Diese Trennung ist keine Förmlichkeit, sondern eine Zugangsfrage.
 | Migration **ausführen** | | ✓ |
 | Sichern, wiederherstellen | | ✓ |
 | Tailscale-Knoten, ACLs, Auth-Keys | | ✓ |
+| Passwort der Pforte setzen und ändern | | ✓ |
 | Produktive Daten ansehen | | ✓ |
 
 Ein Assistent hat **keinen Zugriff auf das NAS und keinen auf den produktiven
@@ -41,9 +42,11 @@ dann von Hand ausgeführt. Wer Anweisungen dafür schreibt, prüft sie gegen den
 Code, statt sie zu erfinden — und sagt dazu, was ungeprüft blieb.
 
 Was der Betreiber dafür braucht: Shell-Zugang auf dem TrueNAS mit `sudo`,
-Dockge, das Tailscale-Konto, das GitHub-Repository. Ohne den Tailscale-Zugang
-ist die Anwendung nicht erreichbar — es gibt keinen zweiten Weg hinein. Das
-ist Absicht.
+Dockge, das Tailscale-Konto, das GitHub-Repository und das Passwort der
+Pforte. Ohne den Tailscale-Zugang ist die Anwendung nicht erreichbar — es gibt
+keinen zweiten Weg hinein. Das ist Absicht. Ein vergessenes Passwort der
+Pforte ist dagegen kein Verlust: Wer Shell-Zugang hat, setzt ein neues
+(README, „Zugang & Passwort ändern").
 
 ## Wo die Daten liegen
 
@@ -54,7 +57,8 @@ Alles unter `/mnt/Daten-Z1/apps/notenverwaltung` auf dem NAS:
 | `daten/` | `notenverwaltung.db` — **der gesamte Datenbestand**, Noten und Fotos | 1000:1000 |
 | `sicherungen/` | die nächtlichen Kopien | 1000:1000 |
 | `tailscale/` | Knotenzustand des Sidecars | root:root |
-| (Wurzel) | der Quellbaum, zugleich Git-Arbeitsverzeichnis | root:root |
+| `pforte/` | Caddys Zustand; enthält den Passwort-Hash | root:root |
+| (Wurzel) | der Quellbaum, zugleich Git-Arbeitsverzeichnis; darin `caddy/Caddyfile` | root:root |
 
 Eine einzige SQLite-Datei. Kein zweiter Speicherort, keine Dateien im
 Dateisystem, keine externen Dienste. Fotos liegen als BLOB in derselben Datei
@@ -65,7 +69,7 @@ Dateisystem, keine externen Dienste. Fotos liegen als BLOB in derselben Datei
 1. `CLAUDE.md` lesen. Es ist die kürzeste Beschreibung dessen, was in diesem
    Projekt gilt, und es hat Vorrang vor Gewohnheiten.
 2. Die Tests laufen lassen (`docs/entwicklung.md`). Das ist der schnellste Weg,
-   dem Code zu vertrauen: 478 Tests, keine Attrappen für die Datenbank, jeder
+   dem Code zu vertrauen: 493 Tests, keine Attrappen für die Datenbank, jeder
    Test baut sein Schema über die echte Migration auf.
 3. `docs/notenlogik.md` lesen. Der fachliche Kern und der einzige Teil, den man
    nicht aus dem Code erschließen sollte.
@@ -84,9 +88,10 @@ Dateisystem, keine externen Dienste. Fotos liegen als BLOB in derselben Datei
 
 ## Was nicht getan wird
 
-- **Keine Authentifizierung nachrüsten.** Nicht vergessen, sondern
-  entschieden: Nicht geschriebener Auth-Code kann keine Lücke haben. Der
-  Zugangsschutz sind die Tailscale-ACLs.
+- **Keine Authentifizierung in der Anwendung nachrüsten.** Nicht vergessen,
+  sondern entschieden: Nicht geschriebener Auth-Code kann keine Lücke haben.
+  Der Zugangsschutz liegt davor, auf Infrastrukturebene: die Tailscale-ACLs
+  und die Caddy-Pforte mit Passwort.
 - **Kein `cp` auf die laufende Datenbank.** Im WAL-Modus entsteht dabei ein
   inkonsistenter Stand — im schlimmsten Fall eine Datei ohne die letzten
   Eintragungen. Sichern nur über `scripts/backup.py`.

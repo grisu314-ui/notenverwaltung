@@ -37,9 +37,9 @@ Lesereihenfolge zu Beginn einer Sitzung, wenn du das Projekt nicht kennst: `docs
 | Datenbank | SQLite |
 | ORM / Migrationen | SQLAlchemy + Alembic |
 | Tests | pytest |
-| Deployment | Docker, ein Container, auf TrueNAS SCALE |
-| Reverse Proxy / TLS | keiner, kein TLS — Zugang nur über das Tailnet |
-| Authentifizierung | keine in der Anwendung; Zugangsschutz über Tailscale-ACLs |
+| Deployment | Docker auf TrueNAS SCALE: ein Container für die Anwendung, dazu Tailscale-Sidecar und Caddy-Pforte |
+| Reverse Proxy / TLS | Caddy als Pforte (HTTP Basic Auth) vor der Anwendung, im selben Compose-Stack; kein TLS — Zugang nur über das Tailnet |
+| Authentifizierung | keine in der Anwendung; Zugangsschutz auf Infrastrukturebene: Tailscale (nur Tailnet) + Caddy-Pforte |
 
 Kein Node, kein npm, kein Build-Schritt für das Frontend. Benötigte JS-Bibliotheken (z. B. eine Zuschneidebibliothek für Fotos) werden als statische Datei mitgeliefert und eingebunden. Wenn du meinst, ein Build-Schritt sei nötig, frag nach — setz ihn nicht voraus.
 
@@ -51,7 +51,7 @@ Alternative Stacks schlägst du nicht vor. Die Entscheidung ist begründet gefal
 
 Diese Liste ist die wichtigste in diesem Dokument. Erfahrungsgemäß ergänzt ein Coding-Assistent genau diese Dinge ungefragt, weil sie zu „produktionsreif" zu gehören scheinen. Hier tun sie das nicht.
 
-- **Keine Benutzerverwaltung, kein Login, keine Session, kein Passwort-Hashing, keine Rollen, keine `users`-Tabelle.** Der Zugang wird vollständig davor geregelt: Der Container hat keinen veröffentlichten Port und ist nur über den Tailnet-Namen erreichbar; wer den Knoten erreicht, darf alles. Die App liest auch keinen Identitäts-Header. Das ist kein Versäumnis, sondern eine bewusste Risikoentscheidung: Nicht geschriebener Auth-Code kann keine Auth-Lücke haben.
+- **Keine Benutzerverwaltung, kein Login, keine Session, kein Passwort-Hashing, keine Rollen, keine `users`-Tabelle — in der Anwendung.** Der Zugang wird vollständig davor geregelt, auf Infrastrukturebene: Kein Container hat einen veröffentlichten Port; erreichbar ist nur die Caddy-Pforte über den Tailnet-Namen, und sie verlangt Benutzer und Passwort (HTTP Basic Auth). Die Anwendung hängt nur in einem internen Netz ohne Ausgang. Wer durch die Pforte kommt, darf alles. Die App liest auch keinen Identitäts-Header. Das ist kein Versäumnis, sondern eine bewusste Risikoentscheidung: Nicht geschriebener Auth-Code kann keine Auth-Lücke haben. Änderungen am Zugangsschutz sind Infrastruktur (`caddy/Caddyfile`, Compose-Dateien), nie Anwendungscode.
 - Keine Offline-Fähigkeit, kein Service Worker, keine PWA, kein clientseitiger Datenbestand, keine Synchronisationslogik.
 - Keine Mehrbenutzerfähigkeit, keine Mandantentrennung, keine `owner_id`-Spalten.
 - Kein Stundenplan, keine Anwesenheiten, keine Hausaufgaben, keine Eltern- oder Schülerzugänge, kein Zeugnisdruck.
@@ -116,7 +116,7 @@ Migrationen werden erst auf einer Kopie des produktiven Bestands durchgespielt, 
 
 ## Sicherheit — projektbezogen
 
-Das Bedrohungsmodell ist eng: ein Nutzer, kein öffentlicher Zugang, Zugriff nur über Tailscale, Authentifizierung vorgelagert. Die üblichen Themen Auth-Bypass, Rechteausweitung und Enumeration entfallen damit weitgehend. Was übrig bleibt und ernst genommen wird:
+Das Bedrohungsmodell ist eng: ein Nutzer, kein öffentlicher Zugang, Zugriff nur über Tailscale, Authentifizierung vorgelagert (Caddy-Pforte). Die üblichen Themen Auth-Bypass, Rechteausweitung und Enumeration entfallen damit weitgehend. Was übrig bleibt und ernst genommen wird:
 
 - **Ausgabekodierung.** Schülernamen stammen aus Excel-Importen und werden in HTML gerendert. Jinja2-Autoescaping bleibt aktiv; kein `|safe` auf Daten, die aus der Datenbank kommen.
 - **Dateiupload.** Fotos: Typ prüfen, Größe begrenzen, Bild serverseitig neu kodieren (verwirft Metadaten und manipulierte Inhalte). Kein vom Client gelieferter Dateiname landet je in einem Pfad.
@@ -162,5 +162,7 @@ Technische Schulden benennst du klar, statt sie zu kaschieren. Aber du behebst s
 Keine Floskeln, kein Lob, keine Beschönigung. Direkt und knapp. Fokus auf Korrektheit.
 
 **Offene Fragen listest du am Ende jeder Antwort in einem eigenen Abschnitt „Offene Fragen" auf**, nicht verstreut im Fließtext. Dazu gehören: Entscheidungen, die ich treffen muss; Annahmen, die du getroffen hast und denen ich widersprechen kann; und der Stand offener fachlicher Festlegungen. Auch dann, wenn nichts Neues dazugekommen ist — sonst sind sie in langen Antworten nicht auffindbar.
+
+**Jede Entscheidung, die ich treffen muss, stellst du zusätzlich als Auswahlfrage mit Antworten zum Anklicken** (das Rückfrage-Werkzeug der Umgebung): die empfohlene Antwort zuerst und als solche gekennzeichnet, zu jeder Antwort ein Satz zu ihrer Folge. Freitext bleibt über „Sonstiges" möglich.
 
 Wenn eine meiner Vorgaben inkonsistent, fachlich falsch oder gegen das eigene Projektinteresse gerichtet ist, sag es sachlich und klar. Das gilt ausdrücklich auch für die Spezifikation selbst: Sie ist maßgeblich, aber nicht unfehlbar. Findest du darin einen Widerspruch, benenne ihn, statt eine der beiden Varianten stillschweigend umzusetzen.

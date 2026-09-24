@@ -11,10 +11,23 @@
 # Diese Datei bleibt als bequemer Ein-Befehl-Weg für einen zweiten Rechner
 # oder einen Teststand.
 #
-# Aufbau: ein eigener Tailscale-Container, die Anwendung teilt sich dessen
-# Netz-Namespace. Die Anwendung veröffentlicht damit KEINEN eigenen Port und
-# ist außerhalb des Tailnets nicht erreichbar — das ist die Anforderung aus
-# Abschnitt 2, Punkt 6 der Spezifikation.
+# Aufbau (Spezifikation 2), drei Container:
+#
+#   Tailnet ──► tailscale + pforte (ein Netz-Namespace)   Caddy :8000, Basic Auth
+#                     │
+#                     ▼  Netz „intern" (internal: true)
+#               notenverwaltung :8000
+#
+# - `tailscale` ist ein eigener Knoten im Tailnet. Nur er hat eine Verbindung
+#   nach draußen (Netz `default`), weil Tailscale sie selbst braucht.
+# - `pforte` (Caddy) hängt im Netz-Namespace des Sidecars und verlangt Benutzer
+#   und Passwort, bevor sie an die Anwendung weiterreicht.
+# - `notenverwaltung` hängt NUR im Netz `intern`. Aus dem Tailnet ist sie
+#   ausschließlich über die Pforte erreichbar, und nach draußen kommt sie
+#   nicht: `internal: true` gibt dem Netz keinen Ausgang.
+#
+# KEIN ports-Eintrag, an keinem Service. Ein `ports:` am tailscale- oder
+# pforte-Service würde die Anwendung im LAN öffnen -- niemals hinzufügen.
 #
 # Ein eigener Knoten statt des vorhandenen Tailscale-Containers hat einen
 # praktischen Vorteil: In den Tailscale-ACLs lässt sich dann genau für diesen
@@ -23,8 +36,9 @@
 # Vor dem ersten Start anzupassen:
 #   - die beiden Pfade unter volumes. Eingetragen sind die des NAS; auf einem
 #     anderen Rechner zeigen sie woanders hin.
-#   - TS_AUTHKEY in einer .env-Datei neben dieser Datei (gehört nicht ins
-#     Repository; .gitignore deckt sie ab)
+#   - eine .env-Datei neben dieser Datei mit TS_AUTHKEY, PFORTE_USER und
+#     PFORTE_HASH. Vorlage: .env.example. Die .env gehört nicht ins
+#     Repository; .gitignore deckt sie ab.
 #   - das Tailscale-Image festnageln, sobald der Stack einmal lief:
 #       docker exec notenverwaltung-tailscale tailscale version | head -1
 
@@ -45,16 +59,47 @@ services:
     cap_add:
       - NET_ADMIN
       - NET_RAW
+    # default: der Weg ins Internet, den nur Tailscale selbst braucht.
+    # intern:  der Weg zur Anwendung, den die Pforte über diesen Namespace nimmt.
+    networks:
+      - default
+      - intern
+    restart: unless-stopped
+
+  pforte:
+    # Feste Version, nicht latest: Die Pforte ist der Zugangsschutz, sie
+    # tauscht sich nicht unbemerkt aus.
+    image: caddy:2.11.4-alpine
+    container_name: notenverwaltung-pforte
+    # Im Netz des Sidecars: Caddy lauscht dort auf Port 8000 und ist damit
+    # unter http://notenverwaltung:8000 im Tailnet erreichbar -- dieselbe
+    # Adresse wie vorher. Kein ports-Eintrag und keiner möglich.
+    network_mode: service:tailscale
+    volumes:
+      # Der Ordner, nicht die einzelne Datei (Empfehlung der Image-Doku).
+      - ./caddy:/etc/caddy:ro
+      - caddy-daten:/data
+      - caddy-config:/config
+    environment:
+      # Beides aus der .env. Der Hash enthält `$`: in der .env in EINFACHE
+      # Anführungszeichen setzen, sonst ersetzt Compose Teile davon.
+      PFORTE_USER: ${PFORTE_USER:?PFORTE_USER fehlt - bitte in .env eintragen}
+      PFORTE_HASH: ${PFORTE_HASH:?PFORTE_HASH fehlt - bitte in .env eintragen}
+    depends_on:
+      - tailscale
+      - notenverwaltung
     restart: unless-stopped
 
   notenverwaltung:
     build: .
     container_name: notenverwaltung
-    # Kein ports-Eintrag und keiner möglich: der Container hängt im Netz des
-    # Sidecars. Erreichbar ist er ausschließlich über den Tailnet-Namen.
-    network_mode: service:tailscale
-    depends_on:
-      - tailscale
+    # Nur im internen Netz. Der Alias ist der Name, unter dem die Pforte die
+    # Anwendung anspricht (caddy/Caddyfile) -- warum nicht `notenverwaltung`,
+    # steht dort.
+    networks:
+      intern:
+        aliases:
+          - anwendung
     volumes:
       # Die SQLite-Datei gehört auf ein lokales Dataset, niemals auf eine
       # SMB- oder NFS-Freigabe (Spezifikation 2, Punkt 2).
@@ -63,5 +108,13 @@ services:
       - /mnt/Daten-Z1/apps/notenverwaltung/sicherungen:/sicherungen
     restart: unless-stopped
 
+networks:
+  # Ohne Ausgang: Die Anwendung baut keine Verbindung nach draußen auf
+  # (Spezifikation 2, Punkt 7), und hier kann sie es auch nicht.
+  intern:
+    internal: true
+
 volumes:
   tailscale-zustand:
+  caddy-daten:
+  caddy-config:

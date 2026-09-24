@@ -1,9 +1,10 @@
 # Notenverwaltung – Projektspezifikation
 
-**Version:** 1.3 · **Stand:** 19.08.2026
+**Version:** 1.4 · **Stand:** 24.09.2026
 **Zweck:** Beschreibt, *was* gebaut wurde, nicht *wie*. Version 1.2 ergänzte den
 Sitzplan (5.6), Version 1.3 das Merkmal *arbeitet digital* und die beiden
-Zahlen, die daraus folgen. Die Änderungslisten stehen gesammelt am Ende.
+Zahlen, die daraus folgen, Version 1.4 die Zugangspforte vor der Anwendung (2).
+Die Änderungslisten stehen gesammelt am Ende.
 **Auftraggeber/Betreiber/Alleinnutzer:** eine Lehrkraft an einer berufsbildenden Schule (Rheinland-Pfalz).
 
 ---
@@ -34,21 +35,23 @@ Der letzte Punkt ist wichtig: **Es wird bewusst keine Offline-Fähigkeit gebaut.
 | Sprache | Python 3.11 |
 | Datenbank | SQLite |
 | ORM / Migrationen | SQLAlchemy + Alembic |
-| Deployment | Docker, ein Container für die App, ein Tailscale-Sidecar |
+| Deployment | Docker, ein Container für die App, ein Tailscale-Sidecar, eine Caddy-Pforte |
 | Host | TrueNAS SCALE, Compose-Stack über Dockge |
 | Netzzugang | ausschließlich über Tailscale, keine Portfreigabe |
-| Authentifizierung | keine in der Anwendung; Zugangsschutz über Tailscale-ACLs |
+| Authentifizierung | keine in der Anwendung; Zugangsschutz auf Infrastrukturebene: Tailscale (nur Tailnet) + Caddy-Pforte mit HTTP Basic Auth |
 | TLS | keines — siehe unten |
 
 ### Daraus folgende harte Anforderungen
 
-1. **Die Anwendung implementiert keine eigene Benutzerverwaltung, kein Login, kein Session-Handling, kein Passwort-Reset.** Sie liest auch keinen Identitäts-Header. Der Zugang wird vollständig davor geregelt: Der Container hat keinen veröffentlichten Port, hängt im Netz-Namespace eines Tailscale-Sidecars und ist nur über den Tailnet-Namen erreichbar. Wer den Knoten erreicht, darf alles. Diese Auslassung ist beabsichtigt und darf nicht „der Vollständigkeit halber" nachgerüstet werden.
+1. **Die Anwendung implementiert keine eigene Benutzerverwaltung, kein Login, kein Session-Handling, kein Passwort-Reset.** Sie liest auch keinen Identitäts-Header. Der Zugang wird vollständig davor geregelt, **auf Infrastrukturebene: Tailscale (nur Tailnet) + Caddy-Pforte mit HTTP Basic Auth im selben Compose-Stack. Die Anwendung selbst hat weiterhin keine Authentifizierung und keine Netzwerkverbindung nach außen.** Kein Container hat einen veröffentlichten Port. Die Pforte hängt im Netz-Namespace eines Tailscale-Sidecars und ist nur über den Tailnet-Namen erreichbar; die Anwendung hängt ausschließlich in einem internen Docker-Netz ohne Ausgang und ist nur über die Pforte erreichbar. Wer durch die Pforte kommt, darf alles. Die Auslassung in der Anwendung ist beabsichtigt und darf nicht „der Vollständigkeit halber" nachgerüstet werden.
+
+   Bekannte Grenzen der Pforte, in Kauf genommen: kein zweiter Faktor, keine Sperre nach Fehlversuchen, kein Abmelden — die Anmeldung gilt, bis der Browser geschlossen wird.
 2. **Die SQLite-Datei liegt auf einem lokalen ZFS-Dataset**, niemals auf einer SMB- oder NFS-Freigabe. App-Container und Datenbankdatei müssen auf demselben Host laufen.
 3. `PRAGMA foreign_keys = ON` bei **jeder** Verbindung. SQLite hat Fremdschlüssel standardmäßig deaktiviert; ohne dieses Pragma entstehen verwaiste Noten beim Löschen von Klassen oder Kursen.
 4. WAL-Modus aktivieren, `busy_timeout` setzen.
 5. **Backup-Skript** als Teil der Lieferung: `VACUUM INTO` in ein Snapshot-Dataset, per Cron. Kein `cp` auf die laufende Datenbank. Ein dokumentierter, einmal durchgespielter **Restore-Test** gehört zur Abnahme.
 6. **Kein TLS.** Version 1.0 verlangte HTTPS mit gültigem Zertifikat, weil der Kamerazugriff einen Secure Context braucht. Der Betreiber hat entschieden, darauf zu verzichten: Der Verkehr läuft ohnehin verschlüsselt durch das Tailnet, und ein Zertifikat für einen internen Namen ist zusätzlicher Betriebsaufwand. Folge für Abschnitt 7 dort beschrieben.
-7. **Die Anwendung baut keine ausgehenden Verbindungen auf.** Keine CDNs, keine Telemetrie; alle Assets liegen lokal.
+7. **Die Anwendung baut keine ausgehenden Verbindungen auf.** Keine CDNs, keine Telemetrie; alle Assets liegen lokal. Das interne Netz ohne Ausgang (Punkt 1) setzt das zusätzlich technisch durch.
 
 ---
 
@@ -451,6 +454,14 @@ Daraus folgt konkret:
 - Es dürfen keine Daten die Anwendung verlassen außer durch den ausdrücklich ausgelösten Export.
 
 Die Klärung der Genehmigung liegt beim Auftraggeber und ist keine Aufgabe des Entwicklungsprojekts.
+
+---
+
+## Änderungen gegenüber Version 1.3
+
+| Abschnitt | Änderung | Grund |
+|---|---|---|
+| 2 | **Caddy-Pforte** mit HTTP Basic Auth vor der Anwendung, im selben Compose-Stack. Die Anwendung hängt nicht mehr im Netz des Tailscale-Sidecars, sondern nur in einem internen Netz ohne Ausgang | Entscheidung des Betreibers: eine zweite Schutzebene hinter Tailscale. Sie liegt ausschließlich auf Infrastrukturebene; die Anwendung bleibt ohne Login und liest weiterhin keinen Identitäts-Header |
 
 ---
 

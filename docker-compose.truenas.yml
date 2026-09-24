@@ -5,14 +5,25 @@
 # in der Shell (Anleitung, Schritt 3), hier läuft nur noch das fertige
 # Image. Dockge startet und stoppt den Stack, mehr nicht.
 #
-# Alle drei Volumes sind absolute Pfade auf dem NAS -- keine benannten
+# Alle Volumes sind absolute Pfade auf dem NAS -- keine benannten
 # Docker-Volumes. Damit liegt jeder Zustand des Stacks an einer Stelle, die
 # man sehen, sichern und in einen Snapshot nehmen kann.
+#
+# Aufbau (Spezifikation 2), drei Container:
+#
+#   Tailnet ──► tailscale + pforte (ein Netz-Namespace)   Caddy :8000, Basic Auth
+#                     │
+#                     ▼  Netz „intern" (internal: true)
+#               notenverwaltung :8000
+#
+# KEIN ports-Eintrag, an keinem Service. Ein `ports:` am tailscale- oder
+# pforte-Service würde die Anwendung im LAN öffnen -- niemals hinzufügen.
 #
 # Vor dem ersten Start sind genau zwei Werte einzutragen:
 #   1. VERSION beim Tailscale-Image
 #   2. der Tag des gebauten Images bei `notenverwaltung:`
-# Dazu die Datei .env im Stack-Verzeichnis mit TS_AUTHKEY.
+# Dazu die Datei .env im Stack-Verzeichnis mit TS_AUTHKEY, PFORTE_USER und
+# PFORTE_HASH (Vorlage: .env.example im Quellbaum).
 
 services:
   tailscale:
@@ -43,6 +54,38 @@ services:
     cap_add:
       - NET_ADMIN
       - NET_RAW
+    # default: der Weg ins Internet, den nur Tailscale selbst braucht.
+    # intern:  der Weg zur Anwendung, den die Pforte über diesen Namespace nimmt.
+    networks:
+      - default
+      - intern
+    restart: unless-stopped
+
+  pforte:
+    # Feste Version, nicht latest: Die Pforte ist der Zugangsschutz, sie
+    # tauscht sich nicht unbemerkt aus.
+    image: caddy:2.11.4-alpine
+    container_name: notenverwaltung-pforte
+    # Im Netz des Sidecars: Caddy lauscht dort auf Port 8000 und ist damit
+    # unter http://notenverwaltung:8000 im Tailnet erreichbar -- dieselbe
+    # Adresse wie vorher. Kein ports-Eintrag und keiner möglich.
+    network_mode: service:tailscale
+    volumes:
+      # Das Caddyfile aus dem Quellbaum; es kommt mit `git pull`. Der Ordner,
+      # nicht die einzelne Datei (Empfehlung der Image-Doku).
+      - /mnt/Daten-Z1/apps/notenverwaltung/caddy:/etc/caddy:ro
+      # Caddys eigener Zustand. Ohne Zertifikate nichts Wertvolles, aber die
+      # dort abgelegte Konfiguration enthält den Passwort-Hash. Gehört root.
+      - /mnt/Daten-Z1/apps/notenverwaltung/pforte/daten:/data
+      - /mnt/Daten-Z1/apps/notenverwaltung/pforte/config:/config
+    environment:
+      # Beides aus der .env. Der Hash enthält `$`: in der .env in EINFACHE
+      # Anführungszeichen setzen, sonst ersetzt Compose Teile davon.
+      PFORTE_USER: ${PFORTE_USER:?PFORTE_USER fehlt - bitte in .env eintragen}
+      PFORTE_HASH: ${PFORTE_HASH:?PFORTE_HASH fehlt - bitte in .env eintragen}
+    depends_on:
+      - tailscale
+      - notenverwaltung
     restart: unless-stopped
 
   notenverwaltung:
@@ -55,11 +98,14 @@ services:
     # ein lokal vorhandenes Image wird auch ohne sie nicht neu geholt.
     pull_policy: never
     container_name: notenverwaltung
-    # Kein ports-Eintrag und keiner möglich: der Container hängt im Netz des
-    # Sidecars und ist ausschließlich über den Tailnet-Namen erreichbar.
-    network_mode: service:tailscale
-    depends_on:
-      - tailscale
+    # Nur im internen Netz, ohne Ausgang nach draußen und ohne Weg aus dem
+    # Tailnet außer über die Pforte. Der Alias ist der Name, unter dem die
+    # Pforte die Anwendung anspricht (caddy/Caddyfile) -- warum nicht
+    # `notenverwaltung`, steht dort.
+    networks:
+      intern:
+        aliases:
+          - anwendung
     volumes:
       # Lokales Dataset, niemals eine SMB- oder NFS-Freigabe
       # (Spezifikation 2, Punkt 2). Gehört UID/GID 1000.
@@ -67,3 +113,9 @@ services:
       # Getrenntes Ziel, damit es auf ein Snapshot-Dataset zeigen kann.
       - /mnt/Daten-Z1/apps/notenverwaltung/sicherungen:/sicherungen
     restart: unless-stopped
+
+networks:
+  # Ohne Ausgang: Die Anwendung baut keine Verbindung nach draußen auf
+  # (Spezifikation 2, Punkt 7), und hier kann sie es auch nicht.
+  intern:
+    internal: true

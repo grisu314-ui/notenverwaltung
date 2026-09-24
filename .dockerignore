@@ -12,6 +12,7 @@ sicherungen
 *.db-wal
 *.db-shm
 .env
+pforte
 README.md
 docs
 notenverwaltung-spezifikation.md
