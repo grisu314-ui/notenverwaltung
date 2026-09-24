@@ -327,6 +327,28 @@ Sitzplan derselbe Durchlauf, verkürzt:
 Ohne JavaScript bleibt jeder Platz ein gewöhnlicher Link und jede Zuweisung
 ein Formular mit Absendeknopf.
 
+### Die Schnelleingabe der Mitarbeitsnote
+
+Sie schreibt Noten und bekommt deshalb den vollen Durchlauf — nach jeder
+Änderung am Sitzplan zu wiederholen, auf dem Telefon:
+
+1. Sitzplan öffnen, Kurs wählen, „Mitarbeitsnoten". Bei einem Schüler eine
+   Note auswählen. → Unter dem Feld steht „✓" mit Uhrzeit, das Feld ist grün
+   umrandet.
+2. **Flugmodus einschalten**, bei einem anderen Schüler eine Note auswählen.
+   → Das Feld zeigt „…" und **bekommt keinen Haken**. Dann wird es rot
+   („NICHT gespeichert"), über dem Raster steht der Grund — sofort oder nach
+   15 Sekunden, wie in der Serieneingabe.
+3. Seite zu verlassen versuchen. → Der Browser fragt nach.
+4. Flugmodus aus, Seite neu laden. → Das erste Feld zeigt seine Note, das
+   zweite „–" — und das war vorher sichtbar.
+5. Beim ersten Schüler „–" wählen. → „✓ gelöscht", nach dem Neuladen „–".
+
+Was in keinem Fall passieren darf: ein Haken ohne Serverantwort. Der Haken und
+der Wert im Feld werden vom Server aus dem gespeicherten Datensatz gerendert,
+nicht vom Browser gesetzt. Einmal durchgespielt in Chromium mit abgeschaltetem
+Netz; auf einem echten Telefon steht der Durchlauf noch aus.
+
 ## Störungssuche
 
 | Fehlerbild | Ursache | Abhilfe |

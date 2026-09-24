@@ -22,8 +22,11 @@
   {% endif %}
 
   <div class="sitzkopf">
-        {% if modus == "ansicht" %}
+    {% if modus == "ansicht" %}
       <a class="schaltflaeche" href="/klassen/{{ klasse.id }}/sitzplan?modus=bearbeiten{% if kurs %}&amp;kurs={{ kurs.id }}{% endif %}">Plätze bearbeiten</a>
+      {% if kurse %}
+        <a class="schaltflaeche" href="/klassen/{{ klasse.id }}/sitzplan?modus=noten{% if kurs %}&amp;kurs={{ kurs.id }}{% endif %}">Mitarbeitsnoten</a>
+      {% endif %}
       <button type="button" onclick="window.print()">Drucken</button>
     {% else %}
       <a class="schaltflaeche" href="/klassen/{{ klasse.id }}/sitzplan?modus=ansicht{% if kurs %}&amp;kurs={{ kurs.id }}{% endif %}">Fertig</a>
@@ -32,7 +35,7 @@
 
   {% include "_sitzplan_raster.html" %}
 
-  {% if modus != "ansicht" %}
+  {% if modus not in ("ansicht", "noten") %}
     <form method="post" action="/klassen/{{ klasse.id }}/sitzplan/raster" class="rasterform">
       <h2>Raum</h2>
       <label>Reihen

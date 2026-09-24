@@ -30,7 +30,7 @@ Verzeichnis muss existieren — SQLite legt es nicht an und meldet sonst nur
 .venv/bin/pytest
 ```
 
-493 Tests. Jeder baut sich seine eigene Datenbank **über die Alembic-Migration
+521 Tests. Jeder baut sich seine eigene Datenbank **über die Alembic-Migration
 auf**; `create_all()` wird nirgends verwendet, auch nicht im Test. Damit ist
 die Migration bei jedem Lauf mitgeprüft. Der Lauf bricht ab, wenn
 `NOTENVERWALTUNG_DB` gesetzt ist — Tests fassen keinen konfigurierten
@@ -51,6 +51,7 @@ Wichtige Dateien:
 | `test_sitzplan.py` | den Sitzplan: inaktive Schüler, Raster verkleinern, Tauschen |
 | `test_klassenzahlen.py` | Schüleranzahl und Papiertiger — die Zahl, auf die im Unterricht Verlass sein muss |
 | `test_mitarbeitsnote.py` | Vorgabegruppen und die Mitarbeitsnote, samt Rechenprobe zum Gewicht 3 |
+| `test_web_sitzplan.py` | der Sitzplan über die Weboberfläche, darunter die Schnelleingabe; „heute" ist dort festgelegt |
 | `test_zugang.py` | die Compose-Dateien und das Caddyfile: kein `ports:`, Anwendung nur hinter der Pforte, kein Ausgang nach draußen |
 
 ## Aufbau
@@ -94,7 +95,7 @@ und rendern.
 | `foto.py` | Bilder prüfen und neu kodieren |
 | `export.py` | XLSX und Markdown |
 | `loeschen.py` | endgültiges Löschen samt Verdichten der Datei |
-| `sitzplan.py` | Sitzplan: Raster bauen, Plätze setzen, räumen, tauschen, Mitarbeitsnote |
+| `sitzplan.py` | Sitzplan: Raster bauen, Plätze setzen, räumen, tauschen, Mitarbeitsnote samt Schnelleingabe (`tagesstand`) |
 | `klasse.py` | Schüleranzahl und Papiertiger einer Klasse |
 | `settings.py` | persistierte Einstellungen |
 | `fehler.py` | Datenbankfehler → lesbarer deutscher Satz |
