@@ -20,7 +20,23 @@ from pathlib import Path
 import pytest
 
 WURZEL = Path(__file__).resolve().parent.parent
-COMPOSE_DATEIEN = ("docker-compose.yml", "docker-compose.truenas.yml")
+COMPOSE_DATEIEN = (
+    "docker-compose.yml",
+    "docker-compose.truenas.yml",
+    "docker-compose.truenas-dev.yml",
+)
+
+# The test stack is the productive one with these values changed, and with
+# nothing else changed (docs/betrieb.md, "Testumgebung").
+UNTERSCHIEDE_TESTSTACK = (
+    ("/mnt/Daten-Z1/apps/notenverwaltung/", "/mnt/Daten-Z1/apps/notenverwaltung-dev/"),
+    ("container_name: notenverwaltung-tailscale", "container_name: notenverwaltung-dev-tailscale"),
+    ("container_name: notenverwaltung-pforte", "container_name: notenverwaltung-dev-pforte"),
+    ("container_name: notenverwaltung\n", "container_name: notenverwaltung-dev\n"),
+    ("hostname: notenverwaltung\n", "hostname: notenverwaltung-dev\n"),
+    ("TS_HOSTNAME: notenverwaltung\n", "TS_HOSTNAME: notenverwaltung-dev\n"),
+    ("image: notenverwaltung:JJJJ-MM-TT", "image: notenverwaltung-dev:JJJJ-MM-TT"),
+)
 
 
 def _ohne_kommentare(text: str) -> str:
@@ -127,3 +143,37 @@ def test_geheimnisse_und_zustand_bleiben_aus_repository_und_image():
         assert eintrag in git, eintrag
     for eintrag in (".env", "pforte", "tailscale"):
         assert eintrag in docker, eintrag
+
+
+def _lies(name: str) -> str:
+    return (WURZEL / name).read_text(encoding="utf-8")
+
+
+def test_der_teststack_weicht_nur_in_namen_und_pfaden_ab():
+    """A second compose file drifts -- unless something compares it.
+
+    Any change to the productive file has to be made to the test file too,
+    or this fails.
+    """
+    erwartet = _ohne_kommentare(_lies("docker-compose.truenas.yml")) + "\n"
+    for produktiv, test in UNTERSCHIEDE_TESTSTACK:
+        erwartet = erwartet.replace(produktiv, test)
+    tatsaechlich = _ohne_kommentare(_lies("docker-compose.truenas-dev.yml")) + "\n"
+
+    assert tatsaechlich == erwartet
+
+
+def test_der_teststack_fasst_den_produktiven_bestand_nicht_an():
+    teststack = _ohne_kommentare(_lies("docker-compose.truenas-dev.yml"))
+
+    assert "/mnt/Daten-Z1/apps/notenverwaltung/" not in teststack
+
+
+def test_der_teststack_hat_im_tailnet_einen_eigenen_namen():
+    """TS_HOSTNAME is the tailnet name. Left at `notenverwaltung`, the test
+    node collides with the productive one and is renamed `notenverwaltung-1`
+    by Tailscale; nothing answers at `notenverwaltung-dev`."""
+    sidecar = _dienste(_lies("docker-compose.truenas-dev.yml"))["tailscale"]
+
+    assert re.search(r"^\s+TS_HOSTNAME: notenverwaltung-dev\s*$", sidecar, re.M)
+    assert re.search(r"^\s+hostname: notenverwaltung-dev\s*$", sidecar, re.M)

@@ -92,7 +92,7 @@ sudo chown -R 1000:1000 daten sicherungen
 # tailscale/ und pforte/ gehören root -- beide Container laufen als root
 sudo chmod 700 tailscale pforte
 
-docker build -t notenverwaltung:TEST-TAG .
+docker build -t notenverwaltung-dev:$(date +%Y-%m-%d) .
 ```
 
 **Ohne das Zielverzeichnis am Ende legt `git clone` ein eigenes Unterverzeichnis
@@ -115,9 +115,20 @@ Datenbank, gleich aus welchem Baum gebaut wird.
 
 ### Was gegenüber dem produktiven Stack anders sein muss
 
-Keine zweite Compose-Datei im Quellbaum, sondern eine Kopie der produktiven
-mit acht geänderten Werten — eine mitgepflegte zweite Datei läuft
-erfahrungsgemäß auseinander:
+Die Compose-Datei des Test-Stacks steht im Quellbaum:
+**`docker-compose.truenas-dev.yml`**. In Dockge einen eigenen Stack anlegen
+(z. B. `notenverwaltung-dev`) und ihren Inhalt einfügen:
+
+```bash
+cat /mnt/Daten-Z1/apps/notenverwaltung-dev/docker-compose.truenas-dev.yml
+```
+
+Zwei Platzhalter eintragen wie beim produktiven Stack: `VERSION` beim
+Tailscale-Image (dieselbe wie produktiv) und den Tag des Test-Images.
+
+Sie ist die produktive Datei mit genau diesen geänderten Werten, dazu eine
+eigene `.env`:
+
 
 | Stelle | produktiv | Test |
 |---|---|---|
@@ -128,7 +139,23 @@ erfahrungsgemäß auseinander:
 | `container_name` (Pforte) | `notenverwaltung-pforte` | `notenverwaltung-dev-pforte` |
 | `PFORTE_USER`, `PFORTE_HASH` in `.env` | der produktive Zugang | **eigener** Benutzer und Hash |
 | `container_name` (App) | `notenverwaltung` | `notenverwaltung-dev` |
-| `image:` | der produktive Tag | z. B. `notenverwaltung:sitzplan-test` |
+| `image:` | `notenverwaltung:JJJJ-MM-TT` | `notenverwaltung-dev:JJJJ-MM-TT` |
+
+Eine zweite Compose-Datei läuft erfahrungsgemäß auseinander. Deshalb prüft
+`tests/test_zugang.py`, dass die Testdatei sich von der produktiven **nur** in
+diesen Werten unterscheidet, dass sie keinen produktiven Pfad enthält und dass
+`TS_HOSTNAME` auf `notenverwaltung-dev` steht. Eine Änderung an der
+produktiven Datei gehört also immer auch in die Testdatei.
+
+> **`TS_HOSTNAME` ist der Name im Tailnet, `hostname` nur der des
+> Containers.** Steht bei `TS_HOSTNAME` noch `notenverwaltung`, kollidiert
+> der Testknoten mit dem produktiven. Tailscale nennt ihn dann
+> `notenverwaltung-1`, und unter `notenverwaltung-dev` antwortet nichts. Wer
+> dagegen `http://notenverwaltung:8000` aufruft, landet auf dem
+> **produktiven** Stack. Nach der Berichtigung zeigt
+> `docker exec notenverwaltung-dev-tailscale tailscale status | head -1` den
+> Namen. Bleibt er bei `notenverwaltung-1`, in der Tailscale-Konsole unter
+> *Machines → … → Edit machine name* umbenennen.
 
 Unverändert bleiben der Netz-Alias `anwendung` und das Caddyfile: Beide
 Stacks sind eigene Compose-Projekte mit eigenem internen Netz, der Alias
@@ -154,11 +181,11 @@ Platzhalterbildern. Das Skript bricht ab, wenn die Datenbank nicht leer ist.
 docker run --rm \
     -v /mnt/Daten-Z1/apps/notenverwaltung-dev/daten:/daten \
     --entrypoint alembic \
-    notenverwaltung:TEST-TAG upgrade head
+    notenverwaltung-dev:JJJJ-MM-TT upgrade head
 docker run --rm \
     -v /mnt/Daten-Z1/apps/notenverwaltung-dev/daten:/daten \
     --entrypoint python \
-    notenverwaltung:TEST-TAG scripts/seed_dev.py
+    notenverwaltung-dev:JJJJ-MM-TT scripts/seed_dev.py
 ```
 
 *Läuft die Migration auf meinem echten Bestand?* — mit einer Kopie, gezogen

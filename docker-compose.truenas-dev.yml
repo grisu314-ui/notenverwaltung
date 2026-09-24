@@ -1,0 +1,124 @@
+# Variante für die TESTUMGEBUNG auf TrueNAS SCALE mit Dockge.
+# Anleitung: docs/betrieb.md, Abschnitt „Testumgebung".
+#
+# Dieselbe Datei wie docker-compose.truenas.yml, mit genau diesen Unterschieden:
+#
+#   Stelle                      produktiv                    Test
+#   alle Pfade                  …/notenverwaltung/…          …/notenverwaltung-dev/…
+#   container_name (Sidecar)    notenverwaltung-tailscale    notenverwaltung-dev-tailscale
+#   hostname, TS_HOSTNAME       notenverwaltung              notenverwaltung-dev
+#   container_name (Pforte)     notenverwaltung-pforte       notenverwaltung-dev-pforte
+#   container_name (App)        notenverwaltung              notenverwaltung-dev
+#   image der App               notenverwaltung:DATUM        notenverwaltung-dev:DATUM
+#
+# tests/test_zugang.py prüft, dass es bei genau diesen Unterschieden bleibt.
+# Eine Änderung an der produktiven Datei gehört deshalb immer auch hierher.
+#
+# TS_HOSTNAME ist der Name im Tailnet, nicht `hostname`. Steht dort
+# `notenverwaltung`, kollidiert der Testknoten mit dem produktiven und heißt
+# im Tailnet `notenverwaltung-1` -- unter `notenverwaltung-dev` ist dann
+# nichts erreichbar.
+#
+# Das produktive daten/ wird hier nie eingehängt. Solange alle Pfade auf
+# notenverwaltung-dev zeigen, kann der Test den echten Bestand nicht anfassen.
+#
+# Vor dem ersten Start einzutragen:
+#   1. VERSION beim Tailscale-Image -- dieselbe wie im produktiven Stack
+#   2. der Tag des gebauten Test-Images bei `notenverwaltung-dev:`
+# Dazu die Datei .env im Stack-Verzeichnis des Test-Stacks mit einem EIGENEN
+# TS_AUTHKEY und einem eigenen PFORTE_USER/PFORTE_HASH (Vorlage: .env.example).
+
+services:
+  tailscale:
+    # Beim ersten Mal `latest` eintragen -- das laeuft. Danach die Version
+    # festnageln, damit sich der Sidecar nicht unbemerkt austauscht:
+    #   docker exec notenverwaltung-dev-tailscale tailscale version | head -1
+    # und daraus z. B. tailscale/tailscale:v1.90.2 machen.
+    #
+    # Eine geratene Nummer ist gefaehrlich: Dieser Aufbau setzt voraus, dass
+    # das Image von selbst startet und TS_AUTHKEY auswertet (Programm
+    # `containerboot`). Aeltere Images fuehren nur /bin/sh aus, das sofort
+    # endet -- der Stack laeuft dann nie an.
+    image: tailscale/tailscale:VERSION
+    container_name: notenverwaltung-dev-tailscale
+    hostname: notenverwaltung-dev
+    environment:
+      # Der Schlüssel gehört Ihrer Infrastruktur, nicht der Anwendung.
+      # Die Anwendung selbst hat kein einziges Geheimnis.
+      TS_AUTHKEY: ${TS_AUTHKEY:?TS_AUTHKEY fehlt - bitte in .env eintragen}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_HOSTNAME: notenverwaltung-dev
+    volumes:
+      # Der Knotenzustand. Bleibt er erhalten, wird der Auth-Key nur beim
+      # allerersten Start gebraucht. Dieses Verzeichnis gehört root, NICHT
+      # 1000: tailscaled läuft im Container als root.
+      - /mnt/Daten-Z1/apps/notenverwaltung-dev/tailscale:/var/lib/tailscale
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    # default: der Weg ins Internet, den nur Tailscale selbst braucht.
+    # intern:  der Weg zur Anwendung, den die Pforte über diesen Namespace nimmt.
+    networks:
+      - default
+      - intern
+    restart: unless-stopped
+
+  pforte:
+    # Feste Version, nicht latest: Die Pforte ist der Zugangsschutz, sie
+    # tauscht sich nicht unbemerkt aus.
+    image: caddy:2.11.4-alpine
+    container_name: notenverwaltung-dev-pforte
+    # Im Netz des Sidecars: Caddy lauscht dort auf Port 8000 und ist damit
+    # unter http://notenverwaltung-dev:8000 im Tailnet erreichbar. Kein
+    # ports-Eintrag und keiner möglich.
+    network_mode: service:tailscale
+    volumes:
+      # Das Caddyfile aus dem Quellbaum; es kommt mit `git pull`. Der Ordner,
+      # nicht die einzelne Datei (Empfehlung der Image-Doku).
+      - /mnt/Daten-Z1/apps/notenverwaltung-dev/caddy:/etc/caddy:ro
+      # Caddys eigener Zustand. Ohne Zertifikate nichts Wertvolles, aber die
+      # dort abgelegte Konfiguration enthält den Passwort-Hash. Gehört root.
+      - /mnt/Daten-Z1/apps/notenverwaltung-dev/pforte/daten:/data
+      - /mnt/Daten-Z1/apps/notenverwaltung-dev/pforte/config:/config
+    environment:
+      # Beides aus der .env. Der Hash enthält `$`: in der .env in EINFACHE
+      # Anführungszeichen setzen, sonst ersetzt Compose Teile davon.
+      PFORTE_USER: ${PFORTE_USER:?PFORTE_USER fehlt - bitte in .env eintragen}
+      PFORTE_HASH: ${PFORTE_HASH:?PFORTE_HASH fehlt - bitte in .env eintragen}
+    depends_on:
+      - tailscale
+      - notenverwaltung
+    restart: unless-stopped
+
+  notenverwaltung:
+    # Der Tag aus dem Build-Schritt, Datum statt latest: er ist gleichzeitig
+    # die Rollback-Marke.
+    image: notenverwaltung-dev:JJJJ-MM-TT
+    # Ohne diese Zeile würde Compose bei einem vertippten Tag versuchen, ein
+    # fremdes Image gleichen Namens aus dem Netz zu holen. Meldet Ihre
+    # Compose-Version die Zeile als unbekannt, kann sie ersatzlos weg --
+    # ein lokal vorhandenes Image wird auch ohne sie nicht neu geholt.
+    pull_policy: never
+    container_name: notenverwaltung-dev
+    # Nur im internen Netz, ohne Ausgang nach draußen und ohne Weg aus dem
+    # Tailnet außer über die Pforte. Der Alias ist der Name, unter dem die
+    # Pforte die Anwendung anspricht (caddy/Caddyfile) -- warum nicht
+    # `notenverwaltung`, steht dort.
+    networks:
+      intern:
+        aliases:
+          - anwendung
+    volumes:
+      # Lokales Dataset, niemals eine SMB- oder NFS-Freigabe
+      # (Spezifikation 2, Punkt 2). Gehört UID/GID 1000.
+      - /mnt/Daten-Z1/apps/notenverwaltung-dev/daten:/daten
+      # Getrenntes Ziel, damit es auf ein Snapshot-Dataset zeigen kann.
+      - /mnt/Daten-Z1/apps/notenverwaltung-dev/sicherungen:/sicherungen
+    restart: unless-stopped
+
+networks:
+  # Ohne Ausgang: Die Anwendung baut keine Verbindung nach draußen auf
+  # (Spezifikation 2, Punkt 7), und hier kann sie es auch nicht.
+  intern:
+    internal: true
