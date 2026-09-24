@@ -19,24 +19,25 @@
 # KEIN ports-Eintrag, an keinem Service. Ein `ports:` am tailscale- oder
 # pforte-Service würde die Anwendung im LAN öffnen -- niemals hinzufügen.
 #
-# Vor dem ersten Start sind genau zwei Werte einzutragen:
-#   1. VERSION beim Tailscale-Image
-#   2. der Tag des gebauten Images bei `notenverwaltung:`
+# Vor dem ersten Start ist genau ein Wert einzutragen: der Tag des gebauten
+# Images bei `notenverwaltung:`.
 # Dazu die Datei .env im Stack-Verzeichnis mit TS_AUTHKEY, PFORTE_USER und
 # PFORTE_HASH (Vorlage: .env.example im Quellbaum).
 
 services:
   tailscale:
-    # Beim ersten Mal `latest` eintragen -- das laeuft. Danach die Version
-    # festnageln, damit sich der Sidecar nicht unbemerkt austauscht:
+    # Festgenagelt, damit sich der Sidecar nicht unbemerkt austauscht. Die
+    # laufende Version zeigt
     #   docker exec notenverwaltung-tailscale tailscale version | head -1
-    # und daraus z. B. tailscale/tailscale:v1.90.2 machen.
+    # Aktualisieren: docs/betrieb.md, „Tailscale- und Caddy-Image
+    # aktualisieren". Die Nummer steht in allen drei Compose-Dateien gleich;
+    # tests/test_zugang.py prüft das.
     #
     # Eine geratene Nummer ist gefaehrlich: Dieser Aufbau setzt voraus, dass
     # das Image von selbst startet und TS_AUTHKEY auswertet (Programm
     # `containerboot`). Aeltere Images fuehren nur /bin/sh aus, das sofort
     # endet -- der Stack laeuft dann nie an.
-    image: tailscale/tailscale:VERSION
+    image: tailscale/tailscale:v1.102.2
     container_name: notenverwaltung-tailscale
     hostname: notenverwaltung
     environment:

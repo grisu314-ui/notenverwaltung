@@ -302,36 +302,23 @@ Die Datei steht bewusst **nur einmal** im Projekt, statt hier noch einmal
 abgedruckt zu werden — zwei Kopien laufen auseinander, und eine veraltete
 Compose-Datei bindet im Zweifel das falsche Verzeichnis ein.
 
-**Zwei Werte sind einzutragen:**
+**Ein Wert ist einzutragen:** `notenverwaltung:JJJJ-MM-TT` — der Tag aus
+Schritt 3. Genau so, wie `docker images notenverwaltung` ihn anzeigt.
 
-1. `tailscale/tailscale:VERSION` — **beim ersten Mal `latest` eintragen.**
-   Das läuft, und Sie kommen ohne Umweg zu einem laufenden Stack.
+**Das Tailscale-Image ist festgenagelt** (`tailscale/tailscale:v1.102.2`),
+ebenso die Pforte (`caddy:2.11.4-alpine`). Damit tauscht sich keiner der
+beiden Container beim nächsten Pull unbemerkt aus. Aktualisiert wird von
+Hand, erst im Test-Stack: `betrieb.md`, „Tailscale- und Caddy-Image
+aktualisieren".
 
-   Der Grund für den Platzhalter: Dieser Aufbau setzt voraus, dass das Image
-   von selbst startet und dabei `TS_AUTHKEY` auswertet — das macht das
-   Programm `containerboot`, das erst in neueren Tailscale-Images steckt.
-   Ältere Images führen nur ein blankes `/bin/sh` aus, das sofort endet; der
-   Stack läuft dann nie an (siehe „Störungssuche"). Eine geratene
-   Versionsnummer trifft diesen Fall leicht.
-
-   Die Version Ihres **bestehenden** Tailscale-Containers ist dabei kein
-   guter Anhaltspunkt — sie kann Jahre alt sein und trotzdem laufen, weil
-   dieser Container anders gestartet wird.
-
-   **Sobald der Stack läuft, die Version festnageln.** Sie am laufenden
-   Container ablesen und eintragen:
-
-   ```bash
-   docker exec notenverwaltung-tailscale tailscale version | head -1
-   ```
-
-   Aus `1.90.2` wird `image: tailscale/tailscale:v1.90.2`, dann neu
-   deployen. Damit bleibt der Sidecar auf einem Stand, der nachweislich
-   funktioniert hat, statt sich beim nächsten Pull unbemerkt auszutauschen.
-   `latest` ist der Weg zum ersten Start, nicht der Dauerzustand.
-
-2. `notenverwaltung:JJJJ-MM-TT` — der Tag aus Schritt 3. Genau so, wie
-   `docker images notenverwaltung` ihn anzeigt.
+Eine geratene Tailscale-Version ist gefährlich: Dieser Aufbau setzt voraus,
+dass das Image von selbst startet und dabei `TS_AUTHKEY` auswertet — das
+macht das Programm `containerboot`, das erst in neueren Tailscale-Images
+steckt. Ältere Images führen nur ein blankes `/bin/sh` aus, das sofort
+endet; der Stack läuft dann nie an (siehe „Störungssuche"). Die Version
+Ihres **bestehenden** Tailscale-Containers ist dabei kein guter
+Anhaltspunkt — sie kann Jahre alt sein und trotzdem laufen, weil dieser
+Container anders gestartet wird.
 
 ### Die Volumes
 
@@ -537,8 +524,8 @@ Dockge heraus, liegt es an Dockge und nicht an dieser Compose-Datei.
 
 Die vier häufigsten Ursachen, in dieser Reihenfolge:
 
-1. **Ein Platzhalter steht noch drin** — `VERSION` oder `JJJJ-MM-TT`. Der
-   Stack startet dann absichtlich nicht.
+1. **Ein Platzhalter steht noch drin** — `JJJJ-MM-TT`. Der Stack startet
+   dann absichtlich nicht.
 2. **`TS_AUTHKEY` kommt nicht an** (ebenso `PFORTE_USER`, `PFORTE_HASH`).
    Symptom: `required variable TS_AUTHKEY is missing`. Die `.env` muss im selben Verzeichnis liegen wie die
    `compose.yaml` des Stacks, nicht im Projektverzeichnis. Prüfen mit
@@ -582,7 +569,7 @@ Was dort typischerweise steht, und was es bedeutet:
 
 | Im Protokoll | Ursache | Abhilfe |
 |---|---|---|
-| **gar nichts**, `docker ps -a` zeigt `Restarting (0)` und als Kommando `"/bin/sh"` | **Das Tailscale-Image ist zu alt.** Ohne `containerboot` startet nur eine Shell, die sofort endet — Rückgabewert 0, kein Protokoll | Aktuelle Version eintragen, siehe Schritt 5 |
+| **gar nichts**, `docker ps -a` zeigt `Restarting (0)` und als Kommando `"/bin/sh"` | **Das Tailscale-Image ist zu alt.** Ohne `containerboot` startet nur eine Shell, die sofort endet — Rückgabewert 0, kein Protokoll | Die festgenagelte Version aus dem Repository eintragen, siehe Schritt 5 |
 | `invalid key`, `unauthorized`, `key expired` | Auth-Key abgelaufen, schon verbraucht oder falsch kopiert | Neuen Key erzeugen, `.env` ändern, neu deployen |
 | `wgengine`, `tun`, `/dev/net/tun` | Das TUN-Gerät fehlt auf dem Host | `ls -l /dev/net/tun` — fehlt es, `modprobe tun` und den Stack neu deployen |
 | `permission denied` auf `/var/lib/tailscale` | Zustandsverzeichnis gehört nicht root | `chown -R root:root …/tailscale` |

@@ -39,12 +39,11 @@
 #   - eine .env-Datei neben dieser Datei mit TS_AUTHKEY, PFORTE_USER und
 #     PFORTE_HASH. Vorlage: .env.example. Die .env gehört nicht ins
 #     Repository; .gitignore deckt sie ab.
-#   - das Tailscale-Image festnageln, sobald der Stack einmal lief:
-#       docker exec notenverwaltung-tailscale tailscale version | head -1
 
 services:
   tailscale:
-    image: tailscale/tailscale:latest
+    # Festgenagelt wie in docker-compose.truenas.yml; dieselbe Nummer.
+    image: tailscale/tailscale:v1.102.2
     container_name: notenverwaltung-tailscale
     hostname: notenverwaltung
     environment:

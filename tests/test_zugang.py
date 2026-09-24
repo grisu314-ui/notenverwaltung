@@ -112,6 +112,25 @@ def test_das_caddy_image_ist_festgenagelt(compose):
     assert re.fullmatch(r"\d+\.\d+\.\d+-alpine", image.group(1))
 
 
+def test_das_tailscale_image_ist_festgenagelt(compose):
+    """Neither `latest` nor a placeholder: a pull must not swap the sidecar."""
+    sidecar = _dienste(compose)["tailscale"]
+    image = re.search(r"image:\s*tailscale/tailscale:(\S+)", sidecar)
+
+    assert image is not None
+    assert re.fullmatch(r"v\d+\.\d+\.\d+", image.group(1))
+
+
+def test_alle_stacks_laufen_mit_denselben_images():
+    """One version is tested and then deployed -- not three that drifted."""
+    for muster in (r"image:\s*(tailscale/tailscale:\S+)", r"image:\s*(caddy:\S+)"):
+        gefunden = {
+            name: re.search(muster, _ohne_kommentare(_lies(name))).group(1)
+            for name in COMPOSE_DATEIEN
+        }
+        assert len(set(gefunden.values())) == 1, gefunden
+
+
 def test_das_caddyfile_sperrt_und_leitet_an_den_alias_weiter():
     caddyfile = _ohne_kommentare((WURZEL / "caddy" / "Caddyfile").read_text("utf-8"))
 

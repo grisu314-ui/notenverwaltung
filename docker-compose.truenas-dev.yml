@@ -22,24 +22,25 @@
 # Das produktive daten/ wird hier nie eingehängt. Solange alle Pfade auf
 # notenverwaltung-dev zeigen, kann der Test den echten Bestand nicht anfassen.
 #
-# Vor dem ersten Start einzutragen:
-#   1. VERSION beim Tailscale-Image -- dieselbe wie im produktiven Stack
-#   2. der Tag des gebauten Test-Images bei `notenverwaltung-dev:`
+# Vor dem ersten Start ist genau ein Wert einzutragen: der Tag des gebauten
+# Test-Images bei `notenverwaltung-dev:`.
 # Dazu die Datei .env im Stack-Verzeichnis des Test-Stacks mit einem EIGENEN
 # TS_AUTHKEY und einem eigenen PFORTE_USER/PFORTE_HASH (Vorlage: .env.example).
 
 services:
   tailscale:
-    # Beim ersten Mal `latest` eintragen -- das laeuft. Danach die Version
-    # festnageln, damit sich der Sidecar nicht unbemerkt austauscht:
+    # Festgenagelt, damit sich der Sidecar nicht unbemerkt austauscht. Die
+    # laufende Version zeigt
     #   docker exec notenverwaltung-dev-tailscale tailscale version | head -1
-    # und daraus z. B. tailscale/tailscale:v1.90.2 machen.
+    # Aktualisieren: docs/betrieb.md, „Tailscale- und Caddy-Image
+    # aktualisieren". Die Nummer steht in allen drei Compose-Dateien gleich;
+    # tests/test_zugang.py prüft das.
     #
     # Eine geratene Nummer ist gefaehrlich: Dieser Aufbau setzt voraus, dass
     # das Image von selbst startet und TS_AUTHKEY auswertet (Programm
     # `containerboot`). Aeltere Images fuehren nur /bin/sh aus, das sofort
     # endet -- der Stack laeuft dann nie an.
-    image: tailscale/tailscale:VERSION
+    image: tailscale/tailscale:v1.102.2
     container_name: notenverwaltung-dev-tailscale
     hostname: notenverwaltung-dev
     environment:

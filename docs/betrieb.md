@@ -123,8 +123,9 @@ Die Compose-Datei des Test-Stacks steht im Quellbaum:
 cat /mnt/Daten-Z1/apps/notenverwaltung-dev/docker-compose.truenas-dev.yml
 ```
 
-Zwei Platzhalter eintragen wie beim produktiven Stack: `VERSION` beim
-Tailscale-Image (dieselbe wie produktiv) und den Tag des Test-Images.
+Einen Platzhalter eintragen wie beim produktiven Stack: den Tag des
+Test-Images. Die Tailscale- und die Caddy-Version stehen fest und sind
+dieselben wie produktiv.
 
 Sie ist die produktive Datei mit genau diesen geänderten Werten, dazu eine
 eigene `.env`:
@@ -203,6 +204,23 @@ sudo chown 1000:1000 /mnt/Daten-Z1/apps/notenverwaltung-dev/daten/notenverwaltun
 
 Erst wenn das sauber läuft, den nächsten Abschnitt gegen den produktiven
 Stack fahren.
+
+## Tailscale- und Caddy-Image aktualisieren
+
+Beide sind festgenagelt: `tailscale/tailscale:v1.102.2` und
+`caddy:2.11.4-alpine`. Ein Pull tauscht sie deshalb nie unbemerkt aus. Eine
+neue Version kommt so hinein:
+
+1. Die neue Nummer in **allen drei** Compose-Dateien eintragen
+   (`docker-compose.truenas.yml`, `docker-compose.truenas-dev.yml`,
+   `docker-compose.yml`). `tests/test_zugang.py` schlägt fehl, solange sie
+   nicht überall gleich ist.
+2. Im **Test-Stack** deployen und die Abnahme der Pforte durchspielen
+   (`inbetriebnahme-truenas.md`).
+3. Erst dann im produktiven Stack.
+
+Zurück geht es genauso: alte Nummer eintragen, deployen. Die Datenverzeichnisse
+berührt keines der beiden Images.
 
 ## Neue Version einspielen
 

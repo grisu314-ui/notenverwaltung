@@ -69,7 +69,7 @@ app/services/   Geschäftslogik
 app/db/         Modelle, Engine, Sitzungen
 app/web/        Router, Templates, statische Dateien
 scripts/        Sicherung, Schemaprüfung, Entwicklungsdaten
-tests/          530 Tests
+tests/          534 Tests
 ```
 
 ## Schnellstart für die Entwicklung
