@@ -30,7 +30,7 @@ Verzeichnis muss existieren — SQLite legt es nicht an und meldet sonst nur
 .venv/bin/pytest
 ```
 
-534 Tests. Jeder baut sich seine eigene Datenbank **über die Alembic-Migration
+535 Tests. Jeder baut sich seine eigene Datenbank **über die Alembic-Migration
 auf**; `create_all()` wird nirgends verwendet, auch nicht im Test. Damit ist
 die Migration bei jedem Lauf mitgeprüft. Der Lauf bricht ab, wenn
 `NOTENVERWALTUNG_DB` gesetzt ist — Tests fassen keinen konfigurierten

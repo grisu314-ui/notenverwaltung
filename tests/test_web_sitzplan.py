@@ -8,6 +8,7 @@ What they cannot prove: how the printed page looks, and what the browser
 shows when the connection drops mid-request. Both are checked by hand.
 """
 
+import re
 from datetime import date
 from decimal import Decimal
 
@@ -307,9 +308,11 @@ def test_mit_kurs_bietet_der_platz_die_mitarbeitsnote_an(client, session, graph)
     assert "modus=mitarbeit" in antwort.text
 
 
-def test_die_eingabemaske_zeigt_die_sechzehn_noten_und_ein_notizfeld(
+def test_die_eingabemaske_zeigt_ganze_noten_und_ein_notizfeld(
     client, session, graph
 ):
+    """On the plan a participation grade is a whole grade (5.6); the serial
+    entry keeps all sixteen values."""
     kurs = _kurs_mit_vorgabegruppen(session, graph)
     _setze(client, graph, 1, 1, graph.schueler_a, kurs)
 
@@ -319,8 +322,10 @@ def test_die_eingabemaske_zeigt_die_sechzehn_noten_und_ein_notizfeld(
         headers=HTMX,
     )
 
-    for beschriftung in ("1+", "2−", "6"):
+    for beschriftung in ("1", "2", "6"):
         assert f">{beschriftung}</option>" in antwort.text
+    for tendenz in ("1+", "2−", "5+"):
+        assert f">{tendenz}</option>" not in antwort.text
     assert 'name="notiz"' in antwort.text
     # A participation grade is always counted (5.6).
     assert "nicht erbracht" not in antwort.text
@@ -517,8 +522,9 @@ def test_unter_jedem_teilnehmer_steht_ein_feld(client, session, graph, heute):
 
     assert f'id="mitarbeit-{graph.schueler_a.id}"' in antwort.text
     assert f'id="mitarbeit-{graph.schueler_b.id}"' in antwort.text
-    for beschriftung in ("–", "1+", "2−", "6"):
-        assert f">{beschriftung}</option>" in antwort.text
+    feld = antwort.text.split(f'id="mitarbeit-{graph.schueler_a.id}"')[1].split("</select>")[0]
+    angeboten = re.findall(r">([^<]*)</option>", feld)
+    assert angeboten == ["–", "1", "2", "3", "4", "5", "6"]
     # Always counted (5.6), and nothing given yet.
     assert "nicht erbracht" not in antwort.text
     assert "✓" not in antwort.text
@@ -556,14 +562,14 @@ def test_eine_auswahl_wird_gespeichert_und_aus_dem_datensatz_bestaetigt(
 ):
     kurs = _kurs_mit_vorgabegruppen(session, graph)
 
-    antwort = _schnell(client, graph, graph.schueler_a, kurs, "1.3")
+    antwort = _schnell(client, graph, graph.schueler_a, kurs, "2.0")
 
     assert antwort.status_code == 200
     assert f'id="mitarbeit-{graph.schueler_a.id}"' in antwort.text
-    assert 'value="1.3" selected' in antwort.text
+    assert 'value="2.0" selected' in antwort.text
     assert "✓" in antwort.text
     [note] = _noten_des_tages(session, graph.schueler_a)
-    assert note.notenwert == Decimal("1.3")
+    assert note.notenwert == Decimal("2.0")
     assert note.leistung.bezeichnung == "Mitarbeit 01.12.2026"
     assert note.leistung.notengruppe.kurs_id == kurs.id
 
@@ -572,11 +578,11 @@ def test_die_heutige_note_steht_nach_dem_neuladen_im_feld(
     client, session, graph, heute
 ):
     kurs = _kurs_mit_vorgabegruppen(session, graph)
-    _schnell(client, graph, graph.schueler_a, kurs, "1.3")
+    _schnell(client, graph, graph.schueler_a, kurs, "2.0")
 
     antwort = client.get(url(graph), params={"modus": "noten", "kurs": kurs.id})
 
-    assert 'value="1.3" selected' in antwort.text
+    assert 'value="2.0" selected' in antwort.text
 
 
 def test_ausserhalb_der_schnelleingabe_zeigt_der_plan_keine_noten(
@@ -585,12 +591,12 @@ def test_ausserhalb_der_schnelleingabe_zeigt_der_plan_keine_noten(
     """5.6: the grade shows in the quick entry only, never in view or print."""
     kurs = _kurs_mit_vorgabegruppen(session, graph)
     _setze(client, graph, 1, 1, graph.schueler_a, kurs)
-    _schnell(client, graph, graph.schueler_a, kurs, "1.3")
+    _schnell(client, graph, graph.schueler_a, kurs, "2.0")
 
     for modus in ("ansicht", "bearbeiten"):
         antwort = client.get(url(graph), params={"modus": modus, "kurs": kurs.id})
         assert 'class="mitarbeitsfeld' not in antwort.text, modus
-        assert 'value="1.3"' not in antwort.text, modus
+        assert 'value="2.0" selected' not in antwort.text, modus
 
 
 def test_eine_zweite_auswahl_aendert_die_note_und_die_historie(
@@ -599,11 +605,11 @@ def test_eine_zweite_auswahl_aendert_die_note_und_die_historie(
     from app.db.models import NoteHistorie
 
     kurs = _kurs_mit_vorgabegruppen(session, graph)
-    _schnell(client, graph, graph.schueler_a, kurs, "1.3")
     _schnell(client, graph, graph.schueler_a, kurs, "2.0")
+    _schnell(client, graph, graph.schueler_a, kurs, "3.0")
 
     [note] = _noten_des_tages(session, graph.schueler_a)
-    assert note.notenwert == Decimal("2.0")
+    assert note.notenwert == Decimal("3.0")
     aktionen = [
         e.aktion
         for e in session.query(NoteHistorie)
@@ -652,10 +658,10 @@ def test_die_schnelleingabe_laesst_die_notiz_stehen(client, session, graph, heut
         headers=HTMX,
     )
 
-    _schnell(client, graph, graph.schueler_a, kurs, "1.3")
+    _schnell(client, graph, graph.schueler_a, kurs, "2.0")
 
     [note] = _noten_des_tages(session, graph.schueler_a)
-    assert note.notenwert == Decimal("1.3")
+    assert note.notenwert == Decimal("2.0")
     assert note.notiz == "Trug die Diskussion."
 
 
@@ -681,6 +687,27 @@ def test_das_platzmenue_ist_mit_der_heutigen_note_vorbelegt(
     assert 'value="3.0" selected' not in antwort.text
     assert 'value="Gute Frage."' in antwort.text
     assert "Heute schon eingetragen: 1−" in antwort.text
+
+
+def test_eine_gespeicherte_tendenz_bleibt_im_feld_sichtbar(
+    client, session, graph, heute
+):
+    """The plan offers whole grades only, but a 2- stored today -- from the
+    serial entry, say -- must not show as "–", as if there were no grade."""
+    from app.services import sitzplan as dienst
+
+    kurs = _kurs_mit_vorgabegruppen(session, graph)
+    dienst.mitarbeitsnote(session, kurs, graph.schueler_a, Decimal("2.3"), datum=SCHULTAG)
+    session.commit()
+
+    antwort = client.get(url(graph), params={"modus": "noten", "kurs": kurs.id})
+
+    feld = antwort.text.split(f'id="mitarbeit-{graph.schueler_a.id}"')[1].split("</select>")[0]
+    assert re.findall(r">([^<]*)</option>", feld) == ["–", "1", "2", "2−", "3", "4", "5", "6"]
+    assert 'value="2.3" selected' in feld
+    # Only the stored one; no other Tendenz is offered.
+    anderes = antwort.text.split(f'id="mitarbeit-{graph.schueler_b.id}"')[1].split("</select>")[0]
+    assert "2−" not in anderes
 
 
 def test_ohne_eigene_note_bleibt_das_platzmenue_auf_drei(client, session, graph, heute):

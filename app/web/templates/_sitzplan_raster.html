@@ -126,7 +126,7 @@
         <input type="hidden" name="kurs" value="{{ kurs.id }}">
         <label>Note
           <select name="notenwert" required>
-            {% for schluessel, beschriftung in notenauswahl %}
+            {% for schluessel, beschriftung in mitarbeitsauswahl(vorhanden.notenwert if vorhanden is not none else none) %}
               <option value="{{ schluessel }}"{% if (vorhanden is not none and schluessel == vorhanden.notenwert | string) or (vorhanden is none and beschriftung == '3') %} selected{% endif %}>{{ beschriftung }}</option>
             {% endfor %}
           </select>

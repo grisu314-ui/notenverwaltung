@@ -77,14 +77,25 @@ def als_notenwert(wert: str) -> Decimal:
         ) from fehler
 
 
-def notenauswahl() -> list[tuple[str, str]]:
-    """The sixteen values for the participation grade (4.1).
+GANZE_NOTEN = tuple(wert for wert in NOTENWERTE if wert == wert.to_integral_value())
 
-    No "nicht gewertet" and no "nicht erbracht": a participation grade is
-    always counted, because there is no performance somebody failed to
-    deliver (5.6).
+
+def mitarbeitsauswahl(vorhanden: Decimal | None = None) -> list[tuple[str, str]]:
+    """What the plan offers for a participation grade: 1 to 6, no Tendenz (5.6).
+
+    No "nicht gewertet" and no "nicht erbracht" either: a participation grade
+    is always counted, because there is no performance somebody failed to
+    deliver.
+
+    The restriction is on the offer, not on the data. A grade stored with a
+    Tendenz -- entered in the serial entry, or before this rule -- is added
+    to the list, so the select shows what is stored instead of falling back
+    to "–" and suggesting there is no grade.
     """
-    return [(str(wert), als_anzeige(wert)) for wert in NOTENWERTE]
+    werte = list(GANZE_NOTEN)
+    if vorhanden is not None and vorhanden not in werte:
+        werte = sorted([*werte, vorhanden])
+    return [(str(wert), als_anzeige(wert)) for wert in werte]
 
 
 def _gewaehlter_kurs(session: Session, klasse: Klasse, kurs_id: int | None) -> Kurs | None:
@@ -139,7 +150,7 @@ def _umfeld(
         "auswahl": gewaehlt,
         "kurs": kurs,
         "kurse": sortiert_nach_bezeichnung(klasse.kurse, "fach"),
-        "notenauswahl": notenauswahl(),
+        "mitarbeitsauswahl": mitarbeitsauswahl,
         "heute": heute,
         "tagesstand": tagesstand,
         "einstellungen": lies_einstellungen(session),
@@ -387,7 +398,7 @@ def schnelle_mitarbeitsnote(
             "kurs": gewaehlter_kurs,
             "s": schueler,
             "tagesstand": dienst.tagesstand(session, gewaehlter_kurs, heute),
-            "notenauswahl": notenauswahl(),
+            "mitarbeitsauswahl": mitarbeitsauswahl,
             "feld_gespeichert": True,
         },
     )

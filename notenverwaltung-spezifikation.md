@@ -177,7 +177,7 @@ unbesetzt, damit die übrigen Nummern gültig bleiben.
 
 ### 4.3 Eingabe
 
-Noten werden ausschließlich **direkt als Notenstufe mit Tendenz** eingetragen (Auswahl aus 1+ … 6). Eine Punkteeingabe mit Umrechnung über einen Notenschlüssel (4.2) gibt es nicht; die Umrechnung von Punkten in Noten findet außerhalb dieser Anwendung statt.
+Noten werden ausschließlich **direkt als Notenstufe mit Tendenz** eingetragen (Auswahl aus 1+ … 6). Einzige Einschränkung des Angebots: Die Mitarbeitsnote im Sitzplan bietet nur die ganzen Noten 1 bis 6 an (5.6). Eine Punkteeingabe mit Umrechnung über einen Notenschlüssel (4.2) gibt es nicht; die Umrechnung von Punkten in Noten findet außerhalb dieser Anwendung statt.
 
 **Status einer Note:**
 
@@ -355,13 +355,13 @@ Der einzige Weg, auf dem der Sitzplan eine Note berührt. Gedacht für den Momen
 
 **Der Kurs wird beim Öffnen gewählt.** Der Sitzplan gehört zur Klasse, eine Note zu einem Kurs. Beim Öffnen des Plans wird deshalb einmal der Kurs gewählt, in dem gerade unterrichtet wird; er bleibt oben sichtbar und gilt für die ganze Sitzung. Ohne gewählten Kurs bietet der Plan keine Mitarbeitsnote an.
 
-**Eintragen.** Im Menü eines besetzten Platzes steht neben „Platz räumen" und „Tauschen" der Eintrag **„Mitarbeitsnote"**. Er öffnet die Auswahl 1+ … 6 und ein **Notizfeld** — die Begründung, die man drei Monate später nicht mehr im Kopf hat. Gespeichert wird nach der Antwort des Servers, sichtbar bestätigt wie überall (10).
+**Eintragen.** Im Menü eines besetzten Platzes steht neben „Platz räumen" und „Tauschen" der Eintrag **„Mitarbeitsnote"**. Er öffnet die Auswahl der ganzen Noten 1 bis 6 und ein **Notizfeld** — die Begründung, die man drei Monate später nicht mehr im Kopf hat. Gespeichert wird nach der Antwort des Servers, sichtbar bestätigt wie überall (10).
 
 **Wohin die Note gehört.** In die Notengruppe **„Mitarbeit"** des gewählten Kurses, im Halbjahr, in das das heutige Datum fällt. Innerhalb dieser Gruppe entsteht je Tag **eine Leistung** „Mitarbeit TT.MM.JJJJ" mit Gewicht 1,0 — angelegt beim ersten Eintrag des Tages, nicht vorab. Wer an diesem Tag keine Note bekommt, hat dort **keinen Datensatz**; das ist kein fehlender Wert, sondern keine Leistung, und es verändert die Berechnung nicht (4.4).
 
 **Voraussetzung.** Der Kurs muss im betreffenden Halbjahr eine Notengruppe „Mitarbeit" haben. Bei neu angelegten Kursen ist sie als Vorgabe vorhanden (3.1); bei älteren Kursen wird sie von Hand angelegt. Fehlt sie, verweigert die Anwendung den Eintrag mit einer Meldung, die genau das sagt — sie legt keine Gruppe im Vorbeigehen an, weil deren Gewicht eine Zeugnisnote verschiebt.
 
-**Schnelleingabe.** Neben „Plätze bearbeiten" steht der Schalter **„Mitarbeitsnoten"**. Er schaltet in einen eigenen Modus, in dem unter jedem Schüler des Plans — auch unter denen ohne Platz — ein kleines Auswahlfeld steht: „–" und 1+ … 6. Eine Auswahl wird sofort gespeichert und am Feld selbst bestätigt, erst nach der Antwort des Servers (10). Die Notiz wird hier nicht erfasst; sie bleibt dem Menü des Platzes vorbehalten, und eine dort gegebene Notiz bleibt beim Ändern der Note in der Schnelleingabe erhalten.
+**Schnelleingabe.** Neben „Plätze bearbeiten" steht der Schalter **„Mitarbeitsnoten"**. Er schaltet in einen eigenen Modus, in dem unter jedem Schüler des Plans — auch unter denen ohne Platz — ein kleines Auswahlfeld steht: „–" und die ganzen Noten 1 bis 6. Eine Auswahl wird sofort gespeichert und am Feld selbst bestätigt, erst nach der Antwort des Servers (10). Die Notiz wird hier nicht erfasst; sie bleibt dem Menü des Platzes vorbehalten, und eine dort gegebene Notiz bleibt beim Ändern der Note in der Schnelleingabe erhalten.
 
 - Das Feld zeigt die **heutige** Mitarbeitsnote im gewählten Kurs. Sonst wäre nicht zu sehen, wer heute schon eine hat, und eine zweite Auswahl überschriebe sie unbemerkt. Das ist die einzige Stelle, an der der Plan eine Note zeigt (siehe „Ausdrücklich nicht Bestandteil").
 - **„–" nimmt die heutige Note zurück** — sie wird gelöscht, wie in der Serieneingabe.
@@ -371,6 +371,8 @@ Der einzige Weg, auf dem der Sitzplan eine Note berührt. Gedacht für den Momen
 - Ist kein Kurs gewählt, fehlt die Gruppe „Mitarbeit" oder liegt der Tag in den Ferien, steht der Grund **einmal** über dem Raster, und es gibt keine Felder.
 - Die Plätze sind in diesem Modus keine Verweise; eine Fehlberührung zwischen zwei Noten öffnet kein Schülerblatt.
 - Felder und Noten erscheinen **nicht im Ausdruck**.
+
+**Nur ganze Noten.** Beide Wege im Sitzplan — Menü und Schnelleingabe — bieten 1 bis 6 **ohne Tendenz** an. Entscheidung des Betreibers: Für die Mitarbeitsnote im Unterricht braucht es keine Tendenzen. Das ist eine Einschränkung des Angebots, nicht der Daten: Eine heute bereits gespeicherte Note mit Tendenz — etwa aus der Serieneingabe der Leistung „Mitarbeit TT.MM.JJJJ", die weiterhin alle Werte anbietet — steht zusätzlich in der Auswahl und ist ausgewählt, statt als „–" zu erscheinen. Die Berechnung (4.4) ist davon nicht berührt.
 
 Das Menü des Platzes ist mit der heutigen Note und Notiz vorbelegt, sofern es sie gibt. Wer dort nur eine Notiz nachträgt, ändert damit nicht versehentlich die Note.
 
@@ -477,6 +479,7 @@ Die Klärung der Genehmigung liegt beim Auftraggeber und ist keine Aufgabe des E
 |---|---|---|
 | 5.6 | **Schnelleingabe der Mitarbeitsnote**: Schalter „Mitarbeitsnoten", ein Auswahlfeld unter jedem Schüler, speichert sofort, „–" nimmt zurück | Wunsch des Betreibers: Der Weg über „Plätze bearbeiten" → Platz → „Mitarbeitsnote" → Eingabe war im Unterricht zu umständlich |
 | 5.6 | In der Schnelleingabe zeigt das Feld die **heutige** Mitarbeitsnote im gewählten Kurs; Ausnahme von „Keine Notenanzeige im Plan" | Entscheidung des Betreibers: sonst sieht man nicht, wer heute schon eine Note hat, und überschreibt sie unbemerkt. Ansicht und Ausdruck bleiben ohne Noten |
+| 5.6, 4.3 | Die Mitarbeitsnote im Sitzplan (Menü und Schnelleingabe) bietet nur **ganze Noten 1 bis 6** an, keine Tendenz. Eine gespeicherte Tendenz wird weiter angezeigt; die Serieneingabe bleibt bei allen Werten | Entscheidung des Betreibers: Für die Mitarbeitsnote im Unterricht braucht es keine Tendenzen. Datenmodell und Berechnung bleiben unverändert |
 | 5.6 | Das Menü des Platzes ist mit heutiger Note und Notiz vorbelegt statt mit „3" | Mit der Vorgabe „3" überschrieb das Nachtragen einer Notiz eine vorhandene Note |
 | 2 | **Caddy-Pforte** mit HTTP Basic Auth vor der Anwendung, im selben Compose-Stack. Die Anwendung hängt nicht mehr im Netz des Tailscale-Sidecars, sondern nur in einem internen Netz ohne Ausgang | Entscheidung des Betreibers: eine zweite Schutzebene hinter Tailscale. Sie liegt ausschließlich auf Infrastrukturebene; die Anwendung bleibt ohne Login und liest weiterhin keinen Identitäts-Header |
 
