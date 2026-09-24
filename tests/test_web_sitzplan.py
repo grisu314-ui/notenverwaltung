@@ -229,7 +229,27 @@ def test_das_umsetzen_laesst_jede_note_in_ruhe(client, session, graph):
 
 # ---------------------------------------------------------------------------
 # The participation grade of the day (5.6)
+#
+# "Today" is fixed for every test that stores a grade. The plan asks the
+# clock, and a test that reads the real date stops working once the school
+# year of the fixture is over (31.07.2027).
 # ---------------------------------------------------------------------------
+
+SCHULTAG = date(2026, 12, 1)
+FERIENTAG = date(2027, 8, 15)
+
+
+@pytest.fixture
+def heute(monkeypatch):
+    """Set today's date for the plan; returns a setter for other days."""
+
+    def setze(tag):
+        monkeypatch.setattr("app.web.routers.sitzplan.heute_lokal", lambda: tag)
+        monkeypatch.setattr("app.services.sitzplan.heute_lokal", lambda: tag)
+
+    setze(SCHULTAG)
+    return setze
+
 
 
 def _kurs_mit_vorgabegruppen(session, graph):
@@ -306,7 +326,9 @@ def test_die_eingabemaske_zeigt_die_sechzehn_noten_und_ein_notizfeld(
     assert "nicht erbracht" not in antwort.text
 
 
-def test_eine_mitarbeitsnote_wird_gespeichert_und_bestaetigt(client, session, graph):
+def test_eine_mitarbeitsnote_wird_gespeichert_und_bestaetigt(
+    client, session, graph, heute
+):
     from app.db.models import Note
 
     kurs = _kurs_mit_vorgabegruppen(session, graph)
@@ -443,25 +465,7 @@ def test_die_markierung_haengt_nicht_allein_an_der_farbe(client, session, graph)
 
 # ---------------------------------------------------------------------------
 # The quick entry: a participation grade select under every pupil (5.6)
-#
-# "Today" is fixed here. The plan asks the clock, and a test that depends on
-# the real date stops working once the fixture's school year is over.
 # ---------------------------------------------------------------------------
-
-SCHULTAG = date(2026, 12, 1)
-FERIENTAG = date(2027, 8, 15)
-
-
-@pytest.fixture
-def heute(monkeypatch):
-    """Set today's date for the plan; returns a setter for other days."""
-
-    def setze(tag):
-        monkeypatch.setattr("app.web.routers.sitzplan.heute_lokal", lambda: tag)
-        monkeypatch.setattr("app.services.sitzplan.heute_lokal", lambda: tag)
-
-    setze(SCHULTAG)
-    return setze
 
 
 def _schnell(client, graph, schueler, kurs, notenwert, htmx=True):

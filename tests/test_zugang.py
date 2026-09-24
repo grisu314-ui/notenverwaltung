@@ -115,8 +115,15 @@ def test_die_vorlage_setzt_den_hash_in_einfache_anfuehrungszeichen():
     assert re.search(r"^PFORTE_HASH='\$2a\$", vorlage, re.M)
 
 
-def test_geheimnisse_und_caddy_zustand_bleiben_aus_dem_repository():
-    ignoriert = (WURZEL / ".gitignore").read_text(encoding="utf-8").splitlines()
+def test_geheimnisse_und_zustand_bleiben_aus_repository_und_image():
+    """On the NAS the working tree holds the state of the sidecar and the gate.
 
-    assert ".env" in ignoriert
-    assert "pforte/" in ignoriert
+    Both contain credentials: the node key, the password hash.
+    """
+    git = (WURZEL / ".gitignore").read_text(encoding="utf-8").splitlines()
+    docker = (WURZEL / ".dockerignore").read_text(encoding="utf-8").splitlines()
+
+    for eintrag in (".env", "pforte/", "tailscale/"):
+        assert eintrag in git, eintrag
+    for eintrag in (".env", "pforte", "tailscale"):
+        assert eintrag in docker, eintrag

@@ -140,14 +140,14 @@ Später aktualisieren mit `git pull` wie gewohnt.
 > den Quellbaum stattdessen in ein Unterverzeichnis `quelle/` — dann liegen
 > Daten und Arbeitsbaum getrennt und dieser Absatz entfällt.
 
-`daten/`, `sicherungen/` und `pforte/` stehen in `.gitignore` und in
-`.dockerignore`.
+`daten/`, `sicherungen/`, `tailscale/` und `pforte/` stehen in `.gitignore`
+und in `.dockerignore`.
 Damit taucht der produktive Bestand weder in `git status` auf noch im
 Build-Kontext, den `docker build` an den Daemon schickt. Einmal nachsehen —
 jetzt, solange dort noch keine echten Daten liegen:
 
 ```bash
-git status --short      # daten/ und sicherungen/ dürfen NICHT auftauchen
+git status --short      # daten/, sicherungen/, tailscale/, pforte/ dürfen NICHT auftauchen
 git clean -nd           # muss leer bleiben
 ```
 
@@ -177,7 +177,7 @@ Bauen Sie mehrmals am selben Tag, hängen Sie eine laufende Nummer an:
 `notenverwaltung:2026-08-11b`.
 
 Im Image ist ausschließlich Code. `.dockerignore` schließt `.env`, `daten/`,
-`sicherungen/`, `pforte/` und `*.db` aus, und das Dockerfile kopiert ohnehin nur `app`,
+`sicherungen/`, `tailscale/`, `pforte/` und `*.db` aus, und das Dockerfile kopiert ohnehin nur `app`,
 `migrations`, `scripts`, `alembic.ini` und das Startskript. Es enthält keine
 Daten und kein Geheimnis.
 

@@ -21,3 +21,7 @@ sicherungen/
 # Caddys Zustand auf dem NAS (docker-compose.truenas.yml). Die dort abgelegte
 # Konfiguration enthält den Passwort-Hash der Pforte.
 pforte/
+
+# Knotenzustand des Tailscale-Sidecars auf dem NAS, darin sein Schlüssel.
+# Liegt im selben Arbeitsbaum; `git add -A` nähme ihn sonst mit.
+tailscale/
